@@ -1,0 +1,39 @@
+using CommandLine;
+
+namespace FlexPkg;
+
+public sealed class CliOptions
+{
+    [Option('t', "discord-token", Required = true, HelpText = "Your Discord bot token.")]
+    public string DiscordToken { get; set; } = string.Empty;
+    
+    [Option('g', "guild-id", Required = true, HelpText = "The Discord guild ID for announcements and interactions.")]
+    public ulong GuildId { get; set; }
+    
+    [Option('c', "channel-id", Required = true, HelpText = "The Discord channel ID for announcements and interactions.")]
+    public ulong ChannelId { get; set; }
+    
+    [Option('n', "username", Required = true, HelpText = "Your Steam username.")]
+    public string Username { get; set; } = string.Empty;
+    
+    [Option('p', "password", Required = true, HelpText = "Your Steam password.")]
+    public string Password { get; set; } = string.Empty;
+    
+    [Option('a', "app-id", Required = true, HelpText = "The Steam app ID.")]
+    public uint AppId { get; set; }
+    
+    [Option('d', "depot-id", Required = true, HelpText = "The Steam depot ID.")]
+    public uint DepotId { get; set; }
+    
+    [Option('b', "branch", Required = false, HelpText = "The Steam branch name.")]
+    public string BranchName { get; set; } = "public";
+    
+    [Option("package-name", Required = true, HelpText = "The name of the NuGet package.")]
+    public string PackageName { get; set; } = string.Empty;
+    
+    [Option("package-description", Required = true, HelpText = "The description of the NuGet package.")]
+    public string PackageDescription { get; set; } = string.Empty;
+    
+    [Option("package-authors", Required = true, HelpText = "The authors of the NuGet package, separated by ';'.")]
+    public string PackageAuthors { get; set; } = string.Empty;
+}

@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlexPkg", "FlexPkg\FlexPkg.csproj", "{FE9B7FF9-7CBF-4914-ABB3-62D680554E6E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlexPkg.Steam", "FlexPkg.Steam\FlexPkg.Steam.csproj", "{05CFC176-533B-4445-9094-C6F410C56856}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlexPkg.Common", "FlexPkg.Common\FlexPkg.Common.csproj", "{1BA03693-99C3-4EE3-8220-F65115FE56D9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FE9B7FF9-7CBF-4914-ABB3-62D680554E6E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE9B7FF9-7CBF-4914-ABB3-62D680554E6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE9B7FF9-7CBF-4914-ABB3-62D680554E6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE9B7FF9-7CBF-4914-ABB3-62D680554E6E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05CFC176-533B-4445-9094-C6F410C56856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05CFC176-533B-4445-9094-C6F410C56856}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05CFC176-533B-4445-9094-C6F410C56856}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05CFC176-533B-4445-9094-C6F410C56856}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BA03693-99C3-4EE3-8220-F65115FE56D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BA03693-99C3-4EE3-8220-F65115FE56D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BA03693-99C3-4EE3-8220-F65115FE56D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BA03693-99C3-4EE3-8220-F65115FE56D9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
