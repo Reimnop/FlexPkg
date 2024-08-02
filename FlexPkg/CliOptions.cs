@@ -36,4 +36,10 @@ public sealed class CliOptions
     
     [Option("package-authors", Required = true, HelpText = "The authors of the NuGet package, separated by ';'.")]
     public string PackageAuthors { get; set; } = string.Empty;
+    
+    [Option("nuget-source", Required = false, HelpText = "The NuGet package source.")]
+    public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";
+    
+    [Option("nuget-api-key", Required = false, HelpText = "The API key for the NuGet package source.")]
+    public string NuGetApiKey { get; set; } = string.Empty;
 }

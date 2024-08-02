@@ -11,9 +11,13 @@ using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
 using Microsoft.EntityFrameworkCore;
 using Mono.Cecil;
+using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging;
+using NuGet.Protocol;
+using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
+using NullLogger = NuGet.Common.NullLogger;
 
 namespace FlexPkg;
 
@@ -174,7 +178,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         await userInterface.AnnounceAsync("🎉 Game has been successfully decompiled!");
         
         logger.LogInformation("Building NuGet package");
-        await userInterface.AnnounceAsync("📦 Building and uploading NuGet package...");
+        await userInterface.AnnounceAsync("📦 Building NuGet package...");
         var packageBuilder = new PackageBuilder
         {
             Id = options.PackageName,
@@ -195,11 +199,46 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             });
         }
 
-        using var packageStream = new MemoryStream();
-        packageBuilder.Save(packageStream);
-        packageStream.Seek(0, SeekOrigin.Begin);
+        await userInterface.AnnounceAsync("📦 NuGet package has been built!");
         
-        await userInterface.AnnounceAsync("📦 NuGet package has been built. Thank you!", new UiFile("package.nupkg", packageStream));
+        await PushNuGetPackage(packageBuilder);
+    }
+
+    private async Task PushNuGetPackage(PackageBuilder packageBuilder)
+    {
+        logger.LogInformation("Pushing NuGet package");
+        await userInterface.AnnounceAsync("⬆️ Pushing package to NuGet...");
+        
+        var path = Path.GetTempFileName();
+        await using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write))
+            packageBuilder.Save(fileStream);
+        
+        var repository = Repository.Factory.GetCoreV3(options.NuGetSource);
+        var resource = await repository.GetResourceAsync<PackageUpdateResource>();
+        
+        try
+        {
+            await resource.Push(
+                packagePaths: new List<string> { path },
+                symbolSource: null,
+                timeoutInSecond: 5 * 60,
+                disableBuffering: false,
+                getApiKey: _ => options.NuGetApiKey,
+                getSymbolApiKey: _ => null,
+                noServiceEndpoint: false,
+                skipDuplicate: false,
+                symbolPackageUpdateResource: null,
+                allowInsecureConnections: false,
+                log: NullLogger.Instance);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while pushing NuGet package");
+            await userInterface.AnnounceAsync(
+                "❌ An error occurred while pushing NuGet package. Please check the logs.");
+        }
+        
+        await userInterface.AnnounceAsync("✅ NuGet package has been pushed. Thank you!");
     }
 
     private async Task<string?> GetUnityBaseLibsPath(int[] unityVersion)
