@@ -213,7 +213,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         await using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write))
             packageBuilder.Save(fileStream);
         
-        var repository = Repository.Factory.GetCoreV3(new PackageSource(@"D:\.nugetsource")); // TODO
+        var repository = Repository.Factory.GetCoreV3(options.NuGetSource);
         var resource = await repository.GetResourceAsync<PackageUpdateResource>();
         
         try
@@ -223,7 +223,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 symbolSource: null,
                 timeoutInSecond: 5 * 60,
                 disableBuffering: false,
-                getApiKey: _ => "",
+                getApiKey: _ => options.NuGetApiKey,
                 getSymbolApiKey: _ => null,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
