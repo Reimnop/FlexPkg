@@ -42,4 +42,9 @@ public sealed class CliOptions
     
     [Option("nuget-api-key", Required = false, HelpText = "The API key for the NuGet package source.")]
     public string NuGetApiKey { get; set; } = string.Empty;
+    
+#if DEBUG
+    [Option("debug-steam-check-disable", Required = false, HelpText = "Disables the Steam update check.")]
+    public bool DebugSteamCheckDisable { get; set; }
+#endif
 }

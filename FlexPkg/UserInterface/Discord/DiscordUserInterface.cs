@@ -8,6 +8,8 @@ namespace FlexPkg.UserInterface.Discord;
 public sealed class DiscordUserInterface : IUserInterface
 {
     private delegate Task ButtonExecutedCallback(SocketMessageComponent messageComponent);
+
+    public int NetworkLatency => client.Latency;
     
     private readonly DiscordSocketClient client = new();
     
@@ -18,6 +20,7 @@ public sealed class DiscordUserInterface : IUserInterface
 
     private readonly ConcurrentDictionary<string, ButtonExecutedCallback> buttonExecutedCallbacks = [];
     private readonly ConcurrentDictionary<string, SocketModal> submittedModals = [];
+    private readonly ConcurrentDictionary<string, UiCommandExecuteCallback?> commandExecuteCallbacks = [];
 
     public DiscordUserInterface(CliOptions options, ILogger<DiscordUserInterface> logger)
     {
@@ -29,6 +32,7 @@ public sealed class DiscordUserInterface : IUserInterface
         client.Log += ClientOnLogAsync;
         client.ButtonExecuted += ClientOnButtonExecutedAsync;
         client.ModalSubmitted += ClientOnModalSubmittedAsync;
+        client.SlashCommandExecuted += ClientOnSlashCommandExecutedAsync;
     }
 
     private Task ClientOnLogAsync(LogMessage arg)
@@ -72,8 +76,112 @@ public sealed class DiscordUserInterface : IUserInterface
         return Task.CompletedTask;
     }
 
+    private async Task ClientOnSlashCommandExecutedAsync(SocketSlashCommand arg)
+    {
+        if (!commandExecuteCallbacks.TryGetValue(arg.CommandName, out var callback) || callback is null)
+        {
+            await arg.RespondAsync("🤔 Hmm, that command doesn't appear to do anything.");
+            return;
+        }
+
+        try
+        {
+            var interaction = new DiscordCommandInteraction(arg);
+            await callback(this, interaction);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while executing the command {CommandName}", arg.CommandName);
+            await arg.RespondAsync("🚨 An error occurred while executing the command. Please check the logs.");
+        }
+    }
+
+    public async Task InitializeAsync(IReadOnlyList<UiCommand> commands)
+    {
+        await client.LoginAsync(TokenType.Bot, token);
+        await client.StartAsync();
+
+        await WaitUntilReadyAsync();
+        
+        // Register slash commands
+        var guild = client.GetGuild(guildId);
+        if (guild is null)
+        {
+            logger.LogError("The guild with ID {GuildId} was not found", guildId);
+            return;
+        }
+
+        var applicationCommands = commands.Select(command =>
+        {
+            var slashCommand = new SlashCommandBuilder()
+                .WithName(command.Name)
+                .WithDescription($"{command.DisplayName} - {command.Description}");
+
+            foreach (var parameter in command.Parameters)
+            {
+                var optionType = MapToDiscordCommandOption(parameter.Type);
+                var slashCommandOption = new SlashCommandOptionBuilder()
+                    .WithName(parameter.Name)
+                    .WithDescription($"{parameter.DisplayName} - {parameter.Description}")
+                    .WithRequired(parameter.Required)
+                    .WithType(optionType);
+
+                if (parameter.Type == UiCommandParameterType.Enum)
+                {
+                    if (parameter.EnumOptions is null)
+                        throw new InvalidOperationException("Enum options must be provided for enum parameters");
+
+                    foreach (var enumOption in parameter.EnumOptions)
+                        slashCommandOption.AddChoice($"{enumOption.DisplayName} - {enumOption.Description}", enumOption.Name);
+                }
+
+                slashCommand.AddOption(slashCommandOption);
+            }
+            
+            return slashCommand.Build();
+        })
+        .Cast<ApplicationCommandProperties>()
+        .ToArray();
+        
+        await guild.BulkOverwriteApplicationCommandAsync(applicationCommands);
+        
+        // Register command execute callbacks
+        foreach (var command in commands)
+            commandExecuteCallbacks.TryAdd(command.Name, command.ExecuteCallback);
+    }
+
+    private static ApplicationCommandOptionType MapToDiscordCommandOption(UiCommandParameterType type)
+        => type switch
+        {
+            UiCommandParameterType.String => ApplicationCommandOptionType.String,
+            UiCommandParameterType.Integer => ApplicationCommandOptionType.Integer,
+            UiCommandParameterType.Boolean => ApplicationCommandOptionType.Boolean,
+            UiCommandParameterType.Float => ApplicationCommandOptionType.Number,
+            UiCommandParameterType.Enum => ApplicationCommandOptionType.String,
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
+        };
+    
+    private Task WaitUntilReadyAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+
+        Func<Task>? readyTask = null;
+        readyTask = () =>
+        {
+            tcs.SetResult(true);
+            client.Ready -= readyTask;
+            return Task.CompletedTask;
+        };
+        client.Ready += readyTask;
+        
+        return tcs.Task;
+    }
+
     public async Task AnnounceAsync(string message, UiFile? file = null)
     {
+        if (client.ConnectionState != ConnectionState.Connected)
+            throw new InvalidOperationException("The client is not connected to Discord");
+        
         var messageChannel = await GetMessageChannelAsync(channelId);
         if (messageChannel is null)
             return;
@@ -86,6 +194,9 @@ public sealed class DiscordUserInterface : IUserInterface
 
     public async Task<FormResponse?> PromptFormAsync(Form form, bool hasFormSummary = true)
     {
+        if (client.ConnectionState != ConnectionState.Connected)
+            throw new InvalidOperationException("The client is not connected to Discord");
+        
         var messageChannel = await GetMessageChannelAsync(channelId);
         
         if (messageChannel is null)
@@ -114,7 +225,7 @@ public sealed class DiscordUserInterface : IUserInterface
                 .WithCustomId(formId);
 
             foreach (var formElement in form.Elements)
-                modal.AddTextInput(formElement.DisplayName, formElement.Name);
+                modal.AddTextInput(formElement.DisplayName, formElement.Name, formElement.Multiline ? TextInputStyle.Paragraph : TextInputStyle.Short);
             
             await messageComponent.RespondWithModalAsync(modal.Build());
         });
@@ -171,52 +282,23 @@ public sealed class DiscordUserInterface : IUserInterface
                 .ToArray());
     }
     
-    private async Task<IMessageChannel?> GetMessageChannelAsync(ulong channelId)
+    private Task<IMessageChannel?> GetMessageChannelAsync(ulong channelId)
     {
-        await EnsureConnectedAsync();
-        
         var guild = client.GetGuild(guildId);
         if (guild is null)
         {
             logger.LogError("The guild with ID {GuildId} was not found", guildId);
-            return null;
+            return Task.FromResult<IMessageChannel?>(null);
         }
         
         var channel = guild.GetChannel(channelId);
         if (channel is not IMessageChannel messageChannel)
         {
             logger.LogError("The channel with ID {ChannelId} was not found", channelId);
-            return null;
+            return Task.FromResult<IMessageChannel?>(null);
         }
         
-        return messageChannel;
-    }
-
-    private async Task EnsureConnectedAsync()
-    {
-        if (client.ConnectionState == ConnectionState.Connected)
-            return;
-        
-        await client.LoginAsync(TokenType.Bot, token);
-        await client.StartAsync();
-        
-        await WaitUntilReadyAsync();
-    }
-
-    private Task WaitUntilReadyAsync()
-    {
-        var tcs = new TaskCompletionSource<bool>();
-
-        Func<Task>? readyTask = null;
-        readyTask = () =>
-        {
-            tcs.SetResult(true);
-            client.Ready -= readyTask;
-            return Task.CompletedTask;
-        };
-        client.Ready += readyTask;
-        
-        return tcs.Task;
+        return  Task.FromResult<IMessageChannel?>(messageChannel);
     }
     
     private void AddButtonExecutedCallback(string customId, ButtonExecutedCallback callback)

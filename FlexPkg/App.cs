@@ -31,7 +31,27 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
     
     public async Task RunAsync(CancellationToken ct = default)
     {
+        // Initialize the UI
+        await userInterface.InitializeAsync([
+            new UiCommand(
+                "ping",
+                "Ping",
+                "Pings the bot",
+                [],
+                (userInterface, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{userInterface.NetworkLatency}ms**"))
+        ]);
+        
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
+
+#if DEBUG
+        if (options.DebugSteamCheckDisable)
+        {
+            logger.LogDebug("Steam checking has been disabled (--debug-steam-check-disable)");
+            await userInterface.AnnounceAsync("⚠️ Steam checking disabled (debug mode)");
+            await Task.Delay(-1, ct);
+            return;
+        }
+#endif
 
         while (!ct.IsCancellationRequested)
         {
@@ -49,7 +69,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             catch (Exception ex)
             {
                 logger.LogError(ex, "An error occurred while handling Steam");
-                await userInterface.AnnounceAsync("❌ An error occurred while handling Steam. Please check the logs.");
+                await userInterface.AnnounceAsync("🚨 An error occurred while handling Steam. Please check the logs.");
             }
             
             await userInterface.AnnounceAsync($"⏰ Waiting for next check, estimated time: {TimestampTag.FromDateTime(DateTime.UtcNow.AddHours(1.0f))}");
@@ -98,7 +118,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             $"App ID: **{steamAppVersion.AppId}**\nDepot ID: **{steamAppVersion.DepotId}**\nManifest ID: **{steamAppVersion.ManifestId}**", new[]
         {
             new FormElement("version", "Version"),
-            new FormElement("patch_notes", "Patch Notes"),
+            new FormElement("patch_notes", "Patch Notes", true),
         });
         
         var response = await userInterface.PromptFormAsync(form);
@@ -234,8 +254,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while pushing NuGet package");
-            await userInterface.AnnounceAsync(
-                "❌ An error occurred while pushing NuGet package. Please check the logs.");
+            await userInterface.AnnounceAsync("🚨 An error occurred while pushing NuGet package. Please check the logs.");
         }
     }
 
