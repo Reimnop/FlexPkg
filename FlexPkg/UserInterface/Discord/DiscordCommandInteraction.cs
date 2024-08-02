@@ -14,12 +14,12 @@ public sealed class DiscordCommandInteraction : IUiCommandInteraction
         this.socketSlashCommand = socketSlashCommand;
         arguments = socketSlashCommand.Data.Options.ToDictionary(x => x.Name, x => x.Value);
     }
+    
+    public async Task RespondAsync(string message) => await RespondAsync(message, false);
+    
+    public async Task RespondAsync(string message, bool error) =>
+        await socketSlashCommand.RespondAsync(message, ephemeral: error);
 
-    public async Task RespondAsync(string message, UiFile? file = null)
-    {
-        if (file is null)
-            await socketSlashCommand.RespondAsync(message);
-        else
-            await socketSlashCommand.RespondWithFileAsync(file.Stream, file.Name, message);
-    }
+    public async Task RespondAsync(string message, UiFile file) =>
+        await socketSlashCommand.RespondWithFileAsync(file.Stream, file.Name, message);
 }
