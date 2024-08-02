@@ -84,7 +84,7 @@ public sealed class DiscordUserInterface : IUserInterface
             await messageChannel.SendFileAsync(new FileAttachment(file.Stream, file.Name), message);
     }
 
-    public async Task<FormResponse?> PromptFormAsync(Form form)
+    public async Task<FormResponse?> PromptFormAsync(Form form, bool hasFormSummary = true)
     {
         var messageChannel = await GetMessageChannelAsync(channelId);
         
@@ -132,11 +132,19 @@ public sealed class DiscordUserInterface : IUserInterface
             .WithTitle("Form Response Summary")
             .WithAuthor(modal.User);
 
-        var formElementNameLookup = form.Elements.ToDictionary(x => x.Name, x => x.DisplayName);
-        foreach (var (key, value) in formResponse.Values)
-            responseSummaryEmbed.AddField(formElementNameLookup[key], value);
+        if (hasFormSummary)
+        {
+            var formElementNameLookup = form.Elements.ToDictionary(x => x.Name, x => x.DisplayName);
+            foreach (var (key, value) in formResponse.Values)
+                responseSummaryEmbed.AddField(formElementNameLookup[key], value);
 
-        await modal.RespondAsync("✅ Form submitted successfully!", embed: responseSummaryEmbed.Build());
+            await modal.RespondAsync("✅ Form submitted successfully!", embed: responseSummaryEmbed.Build());
+        }
+        else
+        {
+            await modal.RespondAsync("✅ Form submitted successfully!");
+        }
+        
         
         // Remove the button from the message
         await message.ModifyAsync(x =>

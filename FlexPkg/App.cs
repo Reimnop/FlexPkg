@@ -94,7 +94,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         
         // Open form
         var form = new Form(
-            "Configure manifest", 
+            "Configure Manifest", 
             $"App ID: **{steamAppVersion.AppId}**\nDepot ID: **{steamAppVersion.DepotId}**\nManifest ID: **{steamAppVersion.ManifestId}**", new[]
         {
             new FormElement("version", "Version"),
