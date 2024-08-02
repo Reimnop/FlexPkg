@@ -11,7 +11,6 @@ using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
 using Microsoft.EntityFrameworkCore;
 using Mono.Cecil;
-using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.Protocol;
@@ -28,6 +27,8 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
     private const string UnityBaseLibsPath = "unity_base_libs";
     
     private static readonly object Cpp2IlLock = new();
+
+    private DateTime? nextCheckTime;
     
     public async Task RunAsync(CancellationToken ct = default)
     {
@@ -38,7 +39,17 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 "Ping",
                 "Pings the bot",
                 [],
-                (userInterface, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{userInterface.NetworkLatency}ms**"))
+                (userInterface, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{userInterface.NetworkLatency}ms**.")),
+            new UiCommand(
+                "check",
+                "Check",
+                "Forces the bot to check for a new app update.",
+                [],
+                async (_, interaction) =>
+                {
+                    nextCheckTime = null;
+                    await interaction.RespondAsync("✅ A forced update check has been queued");
+                })
         ]);
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
@@ -47,7 +58,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         if (options.DebugSteamCheckDisable)
         {
             logger.LogDebug("Steam checking has been disabled (--debug-steam-check-disable)");
-            await userInterface.AnnounceAsync("⚠️ Steam checking disabled (debug mode)");
+            await userInterface.AnnounceAsync("⚠️ DEBUG: Steam checking has been disabled.");
             await Task.Delay(-1, ct);
             return;
         }
@@ -55,7 +66,13 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
 
         while (!ct.IsCancellationRequested)
         {
-            ct.ThrowIfCancellationRequested();
+            while (nextCheckTime.HasValue && DateTime.UtcNow < nextCheckTime.Value)
+            {
+                ct.ThrowIfCancellationRequested();
+                await Task.Delay(1000, ct);
+            }
+
+            nextCheckTime = null;
             
             try
             {
@@ -71,9 +88,9 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 logger.LogError(ex, "An error occurred while handling Steam");
                 await userInterface.AnnounceAsync("🚨 An error occurred while handling Steam. Please check the logs.");
             }
-            
-            await userInterface.AnnounceAsync($"⏰ Waiting for next check, estimated time: {TimestampTag.FromDateTime(DateTime.UtcNow.AddHours(1.0f))}");
-            await Task.Delay(TimeSpan.FromHours(1.0f), ct);
+
+            nextCheckTime = DateTime.UtcNow.AddHours(1.0f);
+            await userInterface.AnnounceAsync($"⏰ Waiting for next check, estimated time: {TimestampTag.FromDateTime(nextCheckTime.Value)}.");
         }
     }
 
@@ -219,18 +236,28 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             });
         }
         
-        await PushNuGetPackage(packageBuilder);
+        await PublishNuGetPackage(packageBuilder);
         
         await userInterface.AnnounceAsync("✅ All done. Thank you!");
     }
 
-    private async Task PushNuGetPackage(PackageBuilder packageBuilder)
+    private async Task PublishNuGetPackage(PackageBuilder packageBuilder)
     {
         logger.LogInformation("Pushing NuGet package");
         await userInterface.AnnounceAsync("⬆️ Pushing package to NuGet...");
         
+#if DEBUG
+        if (options.DebugSavePackageToDisk)
+        {
+            await userInterface.AnnounceAsync("⚠️ DEBUG: Package will be saved to disk instead of uploaded.");
+            await using var fileStream = File.Open($"{options.PackageName}.{packageBuilder.Version}.nupkg", FileMode.Create);
+            packageBuilder.Save(fileStream);
+            return;
+        }
+#endif
+        
         var path = Path.GetTempFileName();
-        await using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write))
+        await using (var fileStream = File.Open(path, FileMode.Create))
             packageBuilder.Save(fileStream);
         
         var repository = Repository.Factory.GetCoreV3(options.NuGetSource);
@@ -239,7 +266,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         try
         {
             await resource.Push(
-                packagePaths: new List<string> { path },
+                packagePaths: [ path ],
                 symbolSource: null,
                 timeoutInSecond: 5 * 60,
                 disableBuffering: false,
