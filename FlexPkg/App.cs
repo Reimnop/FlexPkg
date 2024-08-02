@@ -198,10 +198,10 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 TargetPath = $"lib/netstandard2.0/{Path.GetFileName(file)}",
             });
         }
-
-        await userInterface.AnnounceAsync("📦 NuGet package has been built!");
         
         await PushNuGetPackage(packageBuilder);
+        
+        await userInterface.AnnounceAsync("✅ All done. Thank you!");
     }
 
     private async Task PushNuGetPackage(PackageBuilder packageBuilder)
@@ -237,8 +237,6 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             await userInterface.AnnounceAsync(
                 "❌ An error occurred while pushing NuGet package. Please check the logs.");
         }
-        
-        await userInterface.AnnounceAsync("✅ NuGet package has been pushed. Thank you!");
     }
 
     private async Task<string?> GetUnityBaseLibsPath(int[] unityVersion)
