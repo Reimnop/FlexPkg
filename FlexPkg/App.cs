@@ -48,7 +48,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 async (_, interaction) =>
                 {
                     nextCheckTime = null;
-                    await interaction.RespondAsync("✅ A forced update check has been queued");
+                    await interaction.RespondAsync("✅ A forced update check has been queued!");
                 })
         ]);
         
