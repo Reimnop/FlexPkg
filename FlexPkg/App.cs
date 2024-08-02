@@ -37,7 +37,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             new UiCommand(
                 "ping",
                 "Ping",
-                "Pings the bot",
+                "Pings the bot.",
                 [],
                 (userInterface, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{userInterface.NetworkLatency}ms**.")),
             new UiCommand(
