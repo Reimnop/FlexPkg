@@ -132,8 +132,9 @@ public sealed class DiscordUserInterface : IUserInterface
             .WithTitle("Form Response Summary")
             .WithAuthor(modal.User);
 
+        var formElementNameLookup = form.Elements.ToDictionary(x => x.Name, x => x.DisplayName);
         foreach (var (key, value) in formResponse.Values)
-            responseSummaryEmbed.AddField(key, value);
+            responseSummaryEmbed.AddField(formElementNameLookup[key], value);
 
         await modal.RespondAsync("✅ Form submitted successfully!", embed: responseSummaryEmbed.Build());
         
