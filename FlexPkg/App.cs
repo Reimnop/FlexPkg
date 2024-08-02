@@ -90,6 +90,14 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
 
+        var steamQueueTask = ContinuouslyCheckForQueuedSteamTask(ct);
+        var updateCheckTask = ContinuouslyCheckForGameUpdate(ct);
+        
+        await Task.WhenAll(steamQueueTask, updateCheckTask);
+    }
+
+    private async Task ContinuouslyCheckForQueuedSteamTask(CancellationToken ct = default)
+    {
         while (!ct.IsCancellationRequested)
         {
             // Wait until we have an actual task
@@ -112,6 +120,28 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
             
             // Reset the task
             steamCheckTaskDelegate = null;
+        }
+    }
+
+    private async Task ContinuouslyCheckForGameUpdate(CancellationToken ct = default)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            ct.ThrowIfCancellationRequested();
+            
+            var appVersion = await appSource.GetLatestAppVersionAsync(new SteamAppIdentifier(options.AppId, options.DepotId, options.BranchName));
+            var steamAppVersion = (SteamAppVersion) appVersion;
+            if (!await IsManifestIdInToDatabase(steamAppVersion.ManifestId))
+            {
+                await userInterface.AnnounceAsync(
+                    $"A new game update is detected!\n" +
+                    $"App ID: **{options.AppId}**\n" +
+                    $"Depot ID: **{options.DepotId}**\n" +
+                    $"Branch: **{options.BranchName}**\n" +
+                    $"Manifest ID: **{steamAppVersion.ManifestId}**");
+            }
+            
+            await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
         }
     }
 
