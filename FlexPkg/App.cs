@@ -139,6 +139,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                     $"Depot ID: **{options.DepotId}**\n" +
                     $"Branch: **{options.BranchName}**\n" +
                     $"Manifest ID: **{steamAppVersion.ManifestId}**");
+                // TODO: This will be a problem if the user doesn't respond
             }
             
             await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
