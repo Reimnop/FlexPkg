@@ -39,7 +39,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 "Ping",
                 "Pings the bot.",
                 [],
-                (userInterface, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{userInterface.NetworkLatency}ms**.")),
+                (ui, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{ui.NetworkLatency}ms**.")),
             new UiCommand(
                 "check",
                 "Check",
@@ -49,6 +49,28 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 {
                     nextCheckTime = null;
                     await interaction.RespondAsync("✅ A forced update check has been queued!");
+                }),
+            new UiCommand(
+                "addmanifest",
+                "Add Manifest",
+                "Manually add a manifest to the database.",
+                [
+                    new UiCommandParameter(
+                        "id",
+                        "ID",
+                        "The ID of the manifest.",
+                        UiCommandParameterType.String)
+                ],
+                async (_, interaction) =>
+                {
+                    if (!ulong.TryParse(interaction.Arguments["id"] as string, out var id))
+                    {
+                        await interaction.RespondAsync("❌ Invalid manifest ID.", true);
+                        return;
+                    }
+                    
+                    // TODO
+                    await interaction.RespondAsync($"TODO, ID: {id}");
                 })
         ]);
         
@@ -81,7 +103,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 var branchName = options.BranchName;
                 logger.LogInformation("Checking for updates");
                 await userInterface.AnnounceAsync("🔄 Checking for updates...");
-                await HandleSteam(appId, depotId, branchName, ct);
+                await HandleSteam(appId, depotId, branchName, null, ct);
             }
             catch (Exception ex)
             {
@@ -94,10 +116,14 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         }
     }
 
-    private async Task HandleSteam(uint appId, uint depotId, string branchName, CancellationToken ct = default)
+    private async Task HandleSteam(uint appId, uint depotId, string branchName, ulong? manifestId = null,
+        CancellationToken ct = default)
     {
         var appIdentifier = new SteamAppIdentifier(appId, depotId, branchName);
-        var appVersion = await appSource.GetLatestAppVersionAsync(appIdentifier);
+        var appVersion = manifestId is null
+            ? await appSource.GetLatestAppVersionAsync(appIdentifier)
+            : new SteamAppVersion(appId, depotId, manifestId.Value);
+        
         var steamAppVersion = (SteamAppVersion) appVersion;
         
         if (await IsLocalManifestLatestAsync(steamAppVersion.ManifestId))
