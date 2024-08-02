@@ -65,7 +65,7 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 {
                     if (!ulong.TryParse(interaction.Arguments["id"] as string, out var id))
                     {
-                        await interaction.RespondAsync("❌ Invalid manifest ID.", true);
+                        await interaction.RespondAsync("❌ Invalid manifest ID.", error: true);
                         return;
                     }
                     
