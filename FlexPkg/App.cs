@@ -26,9 +26,11 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
     private const string Cpp2IlOutputPath = "cpp2il_output";
     private const string UnityBaseLibsPath = "unity_base_libs";
     
+    private delegate Task SteamCheckTaskDelegate(CancellationToken ct = default);
+    
     private static readonly object Cpp2IlLock = new();
 
-    private DateTime? nextCheckTime;
+    private SteamCheckTaskDelegate? steamCheckTaskDelegate;
     
     public async Task RunAsync(CancellationToken ct = default)
     {
@@ -47,8 +49,14 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 [],
                 async (_, interaction) =>
                 {
-                    nextCheckTime = null;
-                    await interaction.RespondAsync("✅ A forced update check has been queued!");
+                    if (steamCheckTaskDelegate is not null)
+                    {
+                        await interaction.RespondAsync("❌ An update check is already in progress.", error: true);
+                        return;
+                    }
+                    
+                    steamCheckTaskDelegate = ct => HandleSteam(options.AppId, options.DepotId, options.BranchName, ct: ct);
+                    await interaction.RespondAsync("✅ An update check has been queued!");
                 }),
             new UiCommand(
                 "addmanifest",
@@ -69,67 +77,64 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                         return;
                     }
                     
-                    // TODO
-                    await interaction.RespondAsync($"TODO, ID: {id}");
+                    if (steamCheckTaskDelegate is not null)
+                    {
+                        await interaction.RespondAsync("❌ An update check is already in progress.", error: true);
+                        return;
+                    }
+                    
+                    steamCheckTaskDelegate = ct => HandleSteam(options.AppId, options.DepotId, options.BranchName, id, ct);
+                    await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 })
         ]);
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
 
-#if DEBUG
-        if (options.DebugSteamCheckDisable)
-        {
-            logger.LogDebug("Steam checking has been disabled (--debug-steam-check-disable)");
-            await userInterface.AnnounceAsync("⚠️ DEBUG: Steam checking has been disabled.");
-            await Task.Delay(-1, ct);
-            return;
-        }
-#endif
-
         while (!ct.IsCancellationRequested)
         {
-            while (nextCheckTime.HasValue && DateTime.UtcNow < nextCheckTime.Value)
+            // Wait until we have an actual task
+            while (steamCheckTaskDelegate is null)
             {
                 ct.ThrowIfCancellationRequested();
-                await Task.Delay(1000, ct);
+                await Task.Delay(100, ct);
             }
-
-            nextCheckTime = null;
             
+            // Run the task
             try
             {
-                var appId = options.AppId;
-                var depotId = options.DepotId;
-                var branchName = options.BranchName;
-                logger.LogInformation("Checking for updates");
-                await userInterface.AnnounceAsync("🔄 Checking for updates...");
-                await HandleSteam(appId, depotId, branchName, null, ct);
+                await steamCheckTaskDelegate(ct);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "An error occurred while handling Steam");
                 await userInterface.AnnounceAsync("🚨 An error occurred while handling Steam. Please check the logs.");
             }
-
-            nextCheckTime = DateTime.UtcNow.AddHours(1.0f);
-            await userInterface.AnnounceAsync($"⏰ Waiting for next check, estimated time: {TimestampTag.FromDateTime(nextCheckTime.Value)}.");
+            
+            // Reset the task
+            steamCheckTaskDelegate = null;
         }
     }
 
-    private async Task HandleSteam(uint appId, uint depotId, string branchName, ulong? manifestId = null,
-        CancellationToken ct = default)
+    private async Task HandleSteam(uint appId, uint depotId, string branchName, ulong? manifestId = null, CancellationToken ct = default)
     {
-        var appIdentifier = new SteamAppIdentifier(appId, depotId, branchName);
-        var appVersion = manifestId is null
-            ? await appSource.GetLatestAppVersionAsync(appIdentifier)
-            : new SteamAppVersion(appId, depotId, manifestId.Value);
+        IAppVersion appVersion;
+        if (!manifestId.HasValue)
+        {
+            logger.LogInformation("Checking for updates");
+            await userInterface.AnnounceAsync("🔄 Checking for updates...");
+            var appIdentifier = new SteamAppIdentifier(appId, depotId, branchName);
+            appVersion = await appSource.GetLatestAppVersionAsync(appIdentifier);
+        }
+        else
+        {
+            appVersion = new SteamAppVersion(appId, depotId, manifestId.Value);
+        }
         
         var steamAppVersion = (SteamAppVersion) appVersion;
         
-        if (await IsLocalManifestLatestAsync(steamAppVersion.ManifestId))
+        if (await IsManifestIdInToDatabase(steamAppVersion.ManifestId))
         {
-            logger.LogInformation("The local manifest is up-to-date");
-            await userInterface.AnnounceAsync("🎉 The local manifest is up-to-date! No action will be performed.");
+            await userInterface.AnnounceAsync("🎉 The manifest is already in database! No action will be performed.");
             return;
         }
 
@@ -344,15 +349,6 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         return unityBaseLibsPath;
     }
 
-    private async Task<bool> IsLocalManifestLatestAsync(ulong latestManifestId)
-    {
-        var latestManifest = await context.SteamAppManifests
-            .OrderByDescending(x => x.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        if (latestManifest is null)
-            return false;
-        
-        return latestManifest.Id == latestManifestId;
-    }
+    private Task<bool> IsManifestIdInToDatabase(ulong manifestId)
+        => context.SteamAppManifests.AnyAsync(x => x.Id == manifestId);
 }
