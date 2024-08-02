@@ -144,7 +144,7 @@ public sealed class DiscordUserInterface : IUserInterface
             x.Embed = new EmbedBuilder()
                 .WithTitle(form.Title)
                 .WithDescription(form.Description)
-                .WithFooter("Form submitted. Thank you!")
+                .WithFooter("Form submitted!")
                 .Build();
             x.Components = new ComponentBuilder()
                 .Build();
