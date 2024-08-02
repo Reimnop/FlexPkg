@@ -26,46 +26,47 @@ public sealed class DiscordUserInterface : IUserInterface
         channelId = options.ChannelId;
         this.logger = logger;
 
-        client.Log += arg =>
-        {
-            switch (arg.Severity)
-            {
-                case LogSeverity.Critical:
-                    logger.LogCritical(arg.Exception, "{}", arg.Message);
-                    break;
-                case LogSeverity.Error:
-                    logger.LogError(arg.Exception, "{}", arg.Message);
-                    break;
-                case LogSeverity.Warning:
-                    logger.LogWarning(arg.Exception, "{}", arg.Message);
-                    break;
-                case LogSeverity.Info:
-                    logger.LogInformation(arg.Exception, "{}", arg.Message);
-                    break;
-                case LogSeverity.Verbose:
-                    logger.LogTrace(arg.Exception, "{}", arg.Message);
-                    break;
-                case LogSeverity.Debug:
-                    logger.LogDebug(arg.Exception, "{}", arg.Message);
-                    break;
-                default:
-                    logger.LogTrace(arg.Exception, "{}", arg.Message);
-                    break;
-            }
-            return Task.CompletedTask;
-        };
-        
-        client.ButtonExecuted += ClientOnButtonExecuted;
-        client.ModalSubmitted += ClientOnModalSubmitted;
+        client.Log += ClientOnLogAsync;
+        client.ButtonExecuted += ClientOnButtonExecutedAsync;
+        client.ModalSubmitted += ClientOnModalSubmittedAsync;
     }
 
-    private async Task ClientOnButtonExecuted(SocketMessageComponent arg)
+    private Task ClientOnLogAsync(LogMessage arg)
+    {
+        switch (arg.Severity)
+        {
+            case LogSeverity.Critical:
+                logger.LogCritical(arg.Exception, "{}", arg.Message);
+                break;
+            case LogSeverity.Error:
+                logger.LogError(arg.Exception, "{}", arg.Message);
+                break;
+            case LogSeverity.Warning:
+                logger.LogWarning(arg.Exception, "{}", arg.Message);
+                break;
+            case LogSeverity.Info:
+                logger.LogInformation(arg.Exception, "{}", arg.Message);
+                break;
+            case LogSeverity.Verbose:
+                logger.LogTrace(arg.Exception, "{}", arg.Message);
+                break;
+            case LogSeverity.Debug:
+                logger.LogDebug(arg.Exception, "{}", arg.Message);
+                break;
+            default:
+                logger.LogTrace(arg.Exception, "{}", arg.Message);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task ClientOnButtonExecutedAsync(SocketMessageComponent arg)
     {
         if (buttonExecutedCallbacks.TryGetValue(arg.Data.CustomId, out var callback))
             await callback(arg);
     }
 
-    private Task ClientOnModalSubmitted(SocketModal arg)
+    private Task ClientOnModalSubmittedAsync(SocketModal arg)
     {
         submittedModals.TryAdd(arg.Data.CustomId, arg);
         return Task.CompletedTask;
