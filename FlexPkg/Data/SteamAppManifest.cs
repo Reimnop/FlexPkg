@@ -9,4 +9,5 @@ public sealed class SteamAppManifest
     public string? Version { get; set; }
     public string? PatchNotes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool Handled { get; set; } = false;
 }
