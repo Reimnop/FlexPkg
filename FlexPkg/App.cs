@@ -57,28 +57,15 @@ public sealed class App(
                 {
                     await interaction.DelayResponseAsync();
                     
-                    var newUpdate = await CheckForAppUpdate();
-                    if (newUpdate is not null)
+                    var update = await CheckForAppUpdate();
+                    if (update is null)
                     {
-                        // Insert this manifest to the database
-                        await context.SteamAppManifests.AddAsync(new SteamAppManifest
-                        {
-                            Id = newUpdate.ManifestId,
-                            Handled = false
-                        }, ct);
-                        await context.SaveChangesAsync(ct);
-                        
-                        await interaction.RespondAsync(
-                            $"🔔 A new app update is detected!\n" +
-                            $"- App ID: **{options.AppId}**\n" +
-                            $"- Depot ID: **{options.DepotId}**\n" +
-                            $"- Branch: **{options.BranchName}**\n" +
-                            $"- Manifest ID: **{newUpdate.ManifestId}**");
+                        await interaction.RespondAsync(GetUpdateMessage(null));
+                        return;
                     }
-                    else
-                    {
-                        await interaction.RespondAsync("✅ The latest app version is already fetched!");
-                    }
+                    
+                    await AddUpdateToDatabase(update, ct);
+                    await interaction.RespondAsync(GetUpdateMessage(update));
                 }),
             new UiCommand(
                 "addmanifest",
@@ -151,23 +138,11 @@ public sealed class App(
         {
             ct.ThrowIfCancellationRequested();
             
-            var newUpdate = await CheckForAppUpdate();
-            if (newUpdate is not null)
+            var update = await CheckForAppUpdate();
+            if (update is not null)
             {
-                // Insert this manifest to the database
-                await context.SteamAppManifests.AddAsync(new SteamAppManifest
-                {
-                    Id = newUpdate.ManifestId,
-                    Handled = false
-                }, ct);
-                await context.SaveChangesAsync(ct);
-
-                await userInterface.AnnounceAsync(
-                    $"🔔 A new app update is detected!\n" +
-                    $"- App ID: **{options.AppId}**\n" +
-                    $"- Depot ID: **{options.DepotId}**\n" +
-                    $"- Branch: **{options.BranchName}**\n" +
-                    $"- Manifest ID: **{newUpdate.ManifestId}**");
+                await AddUpdateToDatabase(update, ct);
+                await userInterface.AnnounceAsync(GetUpdateMessage(update));
             }
             
             await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
@@ -182,6 +157,25 @@ public sealed class App(
             return steamAppVersion;
         return null;
     }
+
+    private async Task AddUpdateToDatabase(SteamAppVersion update, CancellationToken ct)
+    {
+        await context.SteamAppManifests.AddAsync(new SteamAppManifest
+        {
+            Id = update.ManifestId,
+            Handled = false
+        }, ct);
+        await context.SaveChangesAsync(ct);
+    }
+
+    private string GetUpdateMessage(SteamAppVersion? version) =>
+        version is null
+            ? "✅ The latest app version is already fetched!"
+            : $"🔔 A new app update is detected!\n" +
+              $"- App ID: **{options.AppId}**\n" +
+              $"- Depot ID: **{options.DepotId}**\n" +
+              $"- Branch: **{options.BranchName}**\n" +
+              $"- Manifest ID: **{version.ManifestId}**";
 
     private async Task HandleSteam(IAppVersion appVersion, CancellationToken ct = default)
     {
