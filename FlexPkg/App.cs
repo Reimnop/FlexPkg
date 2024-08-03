@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
+using System.Text;
 using Cpp2IL.Core;
 using Discord;
 using FlexPkg.Common;
@@ -11,6 +12,7 @@ using Il2CppInterop.Common;
 using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 using Mono.Cecil;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -95,6 +97,41 @@ public sealed class App(
                     steamCheckTaskDelegate = ct => HandleSteam(new SteamAppVersion(options.AppId, options.DepotId, id), ct);
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 }),
+            new UiCommand(
+                "listmanifests",
+                "List Manifests",
+                "Lists the manifests in the database.",
+                [],
+                async (_, interaction) =>
+                {
+                    var manifests = await context.SteamAppManifests
+                        .AsNoTracking()
+                        .OrderByDescending(m => m.CreatedAt)
+                        .ToListAsync(ct);
+
+                    var pages = manifests.Chunk(3).Select(c => new UiPage(
+                        "Title",
+                        "Content",
+                        c.Select(m =>
+                        {
+                            var builder = new StringBuilder($"Created At: {GetTimestamp(m.CreatedAt)}\n");
+                            
+                            if (m.Handled)
+                                builder.Append($"Version: **{m.Version}**\n");
+                            else
+                                builder.Append("Version: *(not handled)*\n");
+                            
+                            if (string.IsNullOrWhiteSpace(m.PatchNotes))
+                                builder.Append("Patch Notes: *(none)*");
+                            else
+                                builder.Append($"Patch Notes:\n`{TruncateString(m.PatchNotes, 180)}`");
+                            
+                            return new UiPageSection($"{m.Id}", builder.ToString());
+                        }).ToList())
+                    ).ToList();
+
+                    await interaction.RespondPaginatedAsync("Message", pages);
+                })
         ]);
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
@@ -104,6 +141,14 @@ public sealed class App(
         
         await Task.WhenAll(steamQueueTask, updateCheckTask);
     }
+
+    private static string GetTimestamp(DateTime dateTime) =>
+        TimestampTag.FormatFromDateTime(dateTime, TimestampTagStyles.ShortDateTime);
+
+    private static string TruncateString(string value, int maxLength) =>
+        value.Length <= maxLength
+            ? value
+            : value[..maxLength] + "...";
 
     private async Task ContinuouslyCheckForQueuedSteamTask(CancellationToken ct = default)
     {
