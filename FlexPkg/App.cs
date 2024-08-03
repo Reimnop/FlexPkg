@@ -20,7 +20,12 @@ using NullLogger = NuGet.Common.NullLogger;
 
 namespace FlexPkg;
 
-public sealed class App(CliOptions options, FlexPkgContext context, IAppSource appSource, IUserInterface userInterface, ILogger<App> logger)
+public sealed class App(
+    CliOptions options,
+    FlexPkgContext context,
+    IAppSource appSource,
+    IUserInterface userInterface,
+    ILogger<App> logger)
 {
     private const string DownloadPath = "output";
     private const string Cpp2IlOutputPath = "cpp2il_output";
@@ -51,11 +56,14 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                 {
                     if (steamCheckTaskDelegate is not null)
                     {
-                        await interaction.RespondAsync("❌ An update check is already in progress.", error: true);
+                        await interaction.RespondAsync(
+                            "❌ An update check is already in progress.", error: true);
                         return;
                     }
                     
-                    steamCheckTaskDelegate = ct => HandleSteam(options.AppId, options.DepotId, options.BranchName, ct: ct);
+                    // TODO
+                    // steamCheckTaskDelegate = ct =>
+                    //     HandleSteam(options.AppId, options.DepotId, options.BranchName, ct: ct);
                     await interaction.RespondAsync("✅ An update check has been queued!");
                 }),
             new UiCommand(
@@ -83,7 +91,8 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
                         return;
                     }
                     
-                    steamCheckTaskDelegate = ct => HandleSteam(options.AppId, options.DepotId, options.BranchName, id, ct);
+                    // TODO
+                    // steamCheckTaskDelegate = ct => HandleSteam(options.AppId, options.DepotId, options.BranchName, id, ct);
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 })
         ]);
@@ -146,22 +155,9 @@ public sealed class App(CliOptions options, FlexPkgContext context, IAppSource a
         }
     }
 
-    private async Task HandleSteam(uint appId, uint depotId, string branchName, ulong? manifestId = null, CancellationToken ct = default)
+    private async Task HandleSteam(IAppVersion appVersion, CancellationToken ct = default)
     {
-        IAppVersion appVersion;
-        if (!manifestId.HasValue)
-        {
-            logger.LogInformation("Checking for updates");
-            await userInterface.AnnounceAsync("🔄 Checking for updates...");
-            var appIdentifier = new SteamAppIdentifier(appId, depotId, branchName);
-            appVersion = await appSource.GetLatestAppVersionAsync(appIdentifier);
-        }
-        else
-        {
-            appVersion = new SteamAppVersion(appId, depotId, manifestId.Value);
-        }
-        
-        var steamAppVersion = (SteamAppVersion) appVersion;
+        var steamAppVersion = (SteamAppVersion)appVersion;
         
         if (await IsManifestIdInToDatabase(steamAppVersion.ManifestId))
         {
