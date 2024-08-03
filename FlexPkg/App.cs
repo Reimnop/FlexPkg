@@ -55,7 +55,7 @@ public sealed class App(
                 [],
                 async (_, interaction) =>
                 {
-                    await interaction.FlagAsLongRunning();
+                    await interaction.DelayResponseAsync();
                     
                     var newUpdate = await CheckForAppUpdate();
                     if (newUpdate is not null)

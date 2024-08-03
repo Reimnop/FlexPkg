@@ -4,12 +4,14 @@ namespace FlexPkg.UserInterface.Discord;
 
 public sealed class DiscordCommandInteraction : IUiCommandInteraction
 {
+    private delegate Task RespondDelegate(string message, UiFile? file, bool error);
+    
     public IReadOnlyDictionary<string, object> Arguments => arguments;
     
     private readonly SocketSlashCommand socketSlashCommand;
     private readonly Dictionary<string, object> arguments;
     
-    private bool longRunning;
+    private bool delayed;
     
     public DiscordCommandInteraction(SocketSlashCommand socketSlashCommand)
     {
@@ -17,24 +19,24 @@ public sealed class DiscordCommandInteraction : IUiCommandInteraction
         arguments = socketSlashCommand.Data.Options.ToDictionary(x => x.Name, x => x.Value);
     }
 
-    public async Task FlagAsLongRunning()
+    public async Task DelayResponseAsync()
     {
+        delayed = true;
         await socketSlashCommand.DeferAsync();
-        longRunning = true;
     }
 
-    public async Task RespondAsync(string message, UiFile? file = null, bool error = false)
+    public Task RespondAsync(string message, UiFile? file = null, bool error = false)
     {
-        // TODO: Evil if else chain
-        if (file is null)
-            if (longRunning)
-                await socketSlashCommand.FollowupAsync(message, ephemeral: error);
-            else
-                await socketSlashCommand.RespondAsync(message, ephemeral: error);
-        else
-            if (longRunning)
-                await socketSlashCommand.FollowupWithFileAsync(file.Stream, file.Name, message, ephemeral: error);
-            else
-                await socketSlashCommand.RespondWithFileAsync(file.Stream, file.Name, message, ephemeral: error);
+        var respondDelegate = GetRespondDelegate();
+        return respondDelegate(message, file, error);
     }
+
+    private RespondDelegate GetRespondDelegate()
+        => delayed 
+            ? (message, file, error) => file is null 
+                ? socketSlashCommand.FollowupAsync(message, ephemeral: error)
+                : socketSlashCommand.FollowupWithFileAsync(file.Stream, file.Name, message, ephemeral: error)
+            : (message, file, error) => file is null
+                ? socketSlashCommand.RespondAsync(message, ephemeral: error)
+                : socketSlashCommand.RespondWithFileAsync(file.Stream, file.Name, message, ephemeral: error);
 }
