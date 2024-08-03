@@ -44,9 +44,6 @@ public sealed class CliOptions
     public string NuGetApiKey { get; set; } = string.Empty;
     
 #if DEBUG
-    [Option("debug-steam-check-disable", Required = false, HelpText = "Disables the Steam update check.")]
-    public bool DebugSteamCheckDisable { get; set; }
-    
     [Option("debug-save-package-to-disk", Required = false, HelpText = "Saves the package to disk instead of upload.")]
     public bool DebugSavePackageToDisk { get; set; }
 #endif
