@@ -6,4 +6,5 @@ public interface IUiCommandInteraction
 
     Task DelayResponseAsync();
     Task RespondAsync(string message, UiFile? file = null, bool error = false);
+    Task RespondPaginatedAsync(string message, IReadOnlyList<UiPage> pages);
 }

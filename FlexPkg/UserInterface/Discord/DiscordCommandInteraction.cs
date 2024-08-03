@@ -9,14 +9,17 @@ public sealed class DiscordCommandInteraction : IUiCommandInteraction
     public IReadOnlyDictionary<string, object> Arguments => arguments;
     
     private readonly SocketSlashCommand socketSlashCommand;
+    private readonly DiscordUserInterface userInterface;
     private readonly Dictionary<string, object> arguments;
     
     private bool delayed;
     
-    public DiscordCommandInteraction(SocketSlashCommand socketSlashCommand)
+    public DiscordCommandInteraction(DiscordUserInterface userInterface, SocketSlashCommand socketSlashCommand)
     {
         this.socketSlashCommand = socketSlashCommand;
-        arguments = socketSlashCommand.Data.Options.ToDictionary(x => x.Name, x => x.Value);
+        this.userInterface = userInterface;
+        arguments = socketSlashCommand.Data.Options
+            .ToDictionary(x => x.Name, x => x.Value);
     }
 
     public async Task DelayResponseAsync()
@@ -29,6 +32,43 @@ public sealed class DiscordCommandInteraction : IUiCommandInteraction
     {
         var respondDelegate = GetRespondDelegate();
         return respondDelegate(message, file, error);
+    }
+
+    public async Task RespondPaginatedAsync(string message, IReadOnlyList<UiPage> pages)
+    {
+        const int initialPage = 0;
+        
+        if (delayed)
+        {
+            var text = DiscordPaginationUtil.GetPageText(message, initialPage, pages.Count);
+            var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage]);
+            var component = DiscordPaginationUtil.GetPaginationControls(initialPage, pages.Count);
+            var followupMessage = await socketSlashCommand.FollowupAsync(text, embed: embed, components: component);
+            var paginatedMessage = new DiscordPaginatedMessage
+            {
+                Id = followupMessage.Id,
+                Content = message,
+                Pages = pages,
+                CurrentPage = initialPage,
+            };
+            userInterface.AddPaginatedMessage(paginatedMessage);
+        }
+        else
+        {
+            var text = DiscordPaginationUtil.GetPageText(message, initialPage, pages.Count);
+            var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage]);
+            var component = DiscordPaginationUtil.GetPaginationControls(initialPage, pages.Count);
+            await socketSlashCommand.RespondAsync(text, embed: embed, components: component);
+            var interactionMessage = await socketSlashCommand.GetOriginalResponseAsync();
+            var paginatedMessage = new DiscordPaginatedMessage
+            {
+                Id = interactionMessage.Id,
+                Content = message,
+                Pages = pages,
+                CurrentPage = initialPage,
+            };
+            userInterface.AddPaginatedMessage(paginatedMessage);
+        }
     }
 
     private RespondDelegate GetRespondDelegate()

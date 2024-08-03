@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace FlexPkg.UserInterface.Discord;
 
-public sealed class DiscordUserInterface : IUserInterface
+public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
 {
     private delegate Task ButtonExecutedCallback(SocketMessageComponent messageComponent);
 
@@ -21,6 +21,9 @@ public sealed class DiscordUserInterface : IUserInterface
     private readonly ConcurrentDictionary<string, ButtonExecutedCallback> buttonExecutedCallbacks = [];
     private readonly ConcurrentDictionary<string, SocketModal> submittedModals = [];
     private readonly ConcurrentDictionary<string, UiCommandExecuteCallback?> commandExecuteCallbacks = [];
+    private readonly ConcurrentDictionary<ulong, DiscordPaginatedMessage> paginatedMessages = [];
+
+    private readonly CancellationTokenSource paginationTimeoutTaskCts = new();
 
     public DiscordUserInterface(CliOptions options, ILogger<DiscordUserInterface> logger)
     {
@@ -66,8 +69,51 @@ public sealed class DiscordUserInterface : IUserInterface
 
     private async Task ClientOnButtonExecutedAsync(SocketMessageComponent arg)
     {
+        // Handle button interactions
         if (buttonExecutedCallbacks.TryGetValue(arg.Data.CustomId, out var callback))
             await callback(arg);
+        
+        // Handle pagination interactions
+        if (paginatedMessages.TryGetValue(arg.Message.Id, out var paginatedMessage))
+        {
+            var messageChannel = await GetMessageChannelAsync(channelId);
+            if (messageChannel is null)
+                return;
+
+            var originalMessage = await messageChannel.GetMessageAsync(paginatedMessage.Id);
+            if (originalMessage is not IUserMessage userMessage)
+                return;
+            
+            var nextIndex = arg.Data.CustomId switch
+            {
+                DiscordPaginationUtil.FirstPageButtonId => 0,
+                DiscordPaginationUtil.PreviousPageButtonId => Math.Max(paginatedMessage.CurrentPage - 1, 0),
+                DiscordPaginationUtil.NextPageButtonId => Math.Min(paginatedMessage.CurrentPage + 1, paginatedMessage.Pages.Count - 1),
+                DiscordPaginationUtil.LastPageButtonId => paginatedMessage.Pages.Count - 1,
+                _ => paginatedMessage.CurrentPage
+            };
+
+            if (nextIndex == paginatedMessage.CurrentPage)
+            {
+                await arg.RespondAsync("🏁 Reached the end of the pages!", ephemeral: true);
+                return;
+            }
+            
+            var text = DiscordPaginationUtil.GetPageText(paginatedMessage.Content, nextIndex, paginatedMessage.Pages.Count);
+            var embed = DiscordPaginationUtil.GetUiPageEmbed(paginatedMessage.Pages[nextIndex]);
+            var component = DiscordPaginationUtil.GetPaginationControls(nextIndex, paginatedMessage.Pages.Count);
+            
+            await arg.UpdateAsync(x =>
+            {
+                x.Content = text;
+                x.Embed = embed;
+                x.Components = component;
+            });
+            
+            // Update the paginated message
+            paginatedMessage.CurrentPage = nextIndex;
+            paginatedMessage.LastUpdated = DateTime.UtcNow;
+        }
     }
 
     private Task ClientOnModalSubmittedAsync(SocketModal arg)
@@ -86,7 +132,7 @@ public sealed class DiscordUserInterface : IUserInterface
 
         try
         {
-            var interaction = new DiscordCommandInteraction(arg);
+            var interaction = new DiscordCommandInteraction(this, arg);
             await callback(this, interaction);
         }
         catch (Exception ex)
@@ -148,6 +194,48 @@ public sealed class DiscordUserInterface : IUserInterface
         // Register command execute callbacks
         foreach (var command in commands)
             commandExecuteCallbacks.TryAdd(command.Name, command.ExecuteCallback);
+        
+        // Add pagination timeout task
+        _ = Task.Run(() => PaginationTimeoutAsync(paginationTimeoutTaskCts.Token));
+    }
+
+    private async Task PaginationTimeoutAsync(CancellationToken ct = default)
+    {
+        var timeout = TimeSpan.FromMinutes(5.0f);
+        var messagesScheduledForRemoval = new Queue<ulong>();
+        
+        while (!ct.IsCancellationRequested)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            foreach (var message in paginatedMessages.Values)
+            {
+                if (message.LastUpdated + timeout > DateTime.UtcNow)
+                    continue;
+                
+                // Remove all components from the message
+                var messageChannel = await GetMessageChannelAsync(channelId);
+                if (messageChannel is null)
+                    continue;
+                
+                var originalMessage = await messageChannel.GetMessageAsync(message.Id);
+                if (originalMessage is not IUserMessage userMessage)
+                    continue;
+
+                await userMessage.ModifyAsync(x => x.Components = new ComponentBuilder().Build());
+                
+                // Schedule the message for removal
+                messagesScheduledForRemoval.Enqueue(message.Id);
+            }
+
+            while (messagesScheduledForRemoval.Count > 0)
+            {
+                var id = messagesScheduledForRemoval.Dequeue();
+                paginatedMessages.TryRemove(id, out _);
+            }
+            
+            await Task.Delay(1000, ct);
+        }
     }
 
     private static ApplicationCommandOptionType MapToDiscordCommandOption(UiCommandParameterType type)
@@ -190,6 +278,36 @@ public sealed class DiscordUserInterface : IUserInterface
             await messageChannel.SendMessageAsync(message);
         else
             await messageChannel.SendFileAsync(new FileAttachment(file.Stream, file.Name), message);
+    }
+
+    public async Task AnnouncePaginatedAsync(string message, IReadOnlyList<UiPage> pages)
+    {
+        if (client.ConnectionState != ConnectionState.Connected)
+            throw new InvalidOperationException("The client is not connected to Discord");
+        
+        var messageChannel = await GetMessageChannelAsync(channelId);
+        if (messageChannel is null)
+            return;
+
+        const int initialPage = 0;
+
+        var text = DiscordPaginationUtil.GetPageText(message, initialPage, pages.Count);
+        var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage]);
+        var component = DiscordPaginationUtil.GetPaginationControls(initialPage, pages.Count);
+        var socketMessage = await messageChannel.SendMessageAsync(text, embed: embed, components: component);
+        var paginatedMessage = new DiscordPaginatedMessage
+        {
+            Id = socketMessage.Id,
+            Content = message,
+            Pages = pages,
+            CurrentPage = initialPage,
+        };
+        AddPaginatedMessage(paginatedMessage);
+    }
+
+    public void AddPaginatedMessage(DiscordPaginatedMessage message)
+    {
+        paginatedMessages.TryAdd(message.Id, message);
     }
 
     public async Task<FormResponse?> PromptFormAsync(Form form, bool hasFormSummary = true)
@@ -318,5 +436,11 @@ public sealed class DiscordUserInterface : IUserInterface
         
         submittedModals.TryRemove(modalId, out var modal);
         return modal;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await paginationTimeoutTaskCts.CancelAsync();
+        await client.DisposeAsync();
     }
 }
