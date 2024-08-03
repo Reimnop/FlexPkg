@@ -94,6 +94,31 @@ public sealed class App(
                     
                     steamCheckTaskDelegate = ct => HandleSteam(new SteamAppVersion(options.AppId, options.DepotId, id), ct);
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
+                }),
+            new UiCommand(
+                "testpagination",
+                "Test Pagination",
+                "Tests the pagination feature.",
+                [],
+                async (_, interaction) =>
+                {
+                    await interaction.RespondPaginatedAsync("Testing 123", [
+                        new UiPage("Page 1", "This is page 1", [
+                            new UiPageSection("Section 1", "This is section 1 page 1"),
+                            new UiPageSection("Section 2", "This is section 2 page 1"),
+                            new UiPageSection("Section 3", "This is section 3 page 1"),
+                        ]),
+                        new UiPage("Page 2", "This is page 2", [
+                            new UiPageSection("Section 1", "This is section 1 page 2"),
+                            new UiPageSection("Section 2", "This is section 2 page 2"),
+                            new UiPageSection("Section 3", "This is section 3 page 2"),
+                        ]),
+                        new UiPage("Page 3", "This is page 3", [
+                            new UiPageSection("Section 1", "This is section 1 page 3"),
+                            new UiPageSection("Section 2", "This is section 2 page 3"),
+                            new UiPageSection("Section 3", "This is section 3 page 3"),
+                        ]),
+                    ]);
                 })
         ]);
         
