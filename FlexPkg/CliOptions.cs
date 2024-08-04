@@ -25,17 +25,17 @@ public sealed class CliOptions
     [Option('d', "depot-id", Required = true, HelpText = "The Steam depot ID.")]
     public uint DepotId { get; set; }
     
-    [Option('b', "branch", Required = false, HelpText = "The Steam branch name.")]
-    public string BranchName { get; set; } = "public";
+    [Option('b', "branches", Required = false, HelpText = "The Steam branches names.")]
+    public IEnumerable<string> BranchNames { get; set; } = ["public"];
     
     [Option("package-name", Required = true, HelpText = "The name of the NuGet package.")]
     public string PackageName { get; set; } = string.Empty;
     
     [Option("package-description", Required = true, HelpText = "The description of the NuGet package.")]
     public string PackageDescription { get; set; } = string.Empty;
-    
-    [Option("package-authors", Required = true, HelpText = "The authors of the NuGet package, separated by ';'.")]
-    public string PackageAuthors { get; set; } = string.Empty;
+
+    [Option("package-authors", Required = true, HelpText = "The authors of the NuGet package.")]
+    public IEnumerable<string> PackageAuthors { get; set; } = [];
     
     [Option("nuget-source", Required = false, HelpText = "The NuGet package source.")]
     public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";

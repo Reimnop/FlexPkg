@@ -2,9 +2,9 @@ using FlexPkg.Common;
 
 namespace FlexPkg.Steam;
 
-public sealed class SteamAppIdentifier(uint appId, uint depotId, string branchName) : IAppIdentifier
+public sealed class SteamAppIdentifier(uint appId, uint depotId, IEnumerable<string> branchNames) : IAppIdentifier
 {
     public uint AppId { get; } = appId;
     public uint DepotId { get; } = depotId;
-    public string BranchName { get; } = branchName;
+    public IEnumerable<string> BranchNames { get; } = branchNames;
 }

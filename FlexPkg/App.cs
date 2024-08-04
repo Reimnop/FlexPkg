@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Text;
 using Cpp2IL.Core;
@@ -12,7 +11,6 @@ using Il2CppInterop.Common;
 using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Primitives;
 using Mono.Cecil;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -58,16 +56,17 @@ public sealed class App(
                 async (_, interaction) =>
                 {
                     await interaction.DelayResponseAsync();
-                    
-                    var update = await CheckForAppUpdate();
-                    if (update is null)
+
+                    var updates = await CheckForAppUpdates();
+                    if (updates.Count == 0)
                     {
-                        await interaction.RespondAsync(GetUpdateMessage(null));
+                        await interaction.RespondAsync(GetUpdatesMessage([]));
                         return;
                     }
-                    
-                    await AddUpdateToDatabase(update, ct);
-                    await interaction.RespondAsync(GetUpdateMessage(update));
+
+                    await AddUpdatesToDatabase(updates, ct);
+                    await interaction.RespondAsync(GetUpdatesMessage(updates));
+
                 }),
             new UiCommand(
                 "addmanifest",
@@ -78,6 +77,11 @@ public sealed class App(
                         "id",
                         "ID",
                         "The ID of the manifest.",
+                        UiCommandParameterType.String),
+                    new UiCommandParameter(
+                        "branch",
+                        "Branch",
+                        "The branch of the manifest.",
                         UiCommandParameterType.String)
                 ],
                 async (_, interaction) =>
@@ -87,6 +91,13 @@ public sealed class App(
                         await interaction.RespondAsync("❌ Invalid manifest ID.", error: true);
                         return;
                     }
+
+                    if (interaction.Arguments["branch"] is not string branch || !options.BranchNames.Contains(branch))
+                    {
+                        var branches = string.Join(", ", options.BranchNames.Select(b => $"`{b}`"));
+                        await interaction.RespondAsync($"❌ Invalid branch name. ({branches})", error: true);
+                        return;
+                    }
                     
                     if (steamCheckTaskDelegate is not null)
                     {
@@ -94,7 +105,8 @@ public sealed class App(
                         return;
                     }
                     
-                    steamCheckTaskDelegate = ct => HandleSteam(new SteamAppVersion(options.AppId, options.DepotId, id), ct);
+                    steamCheckTaskDelegate = ct =>
+                        HandleSteam(new SteamAppVersion(options.AppId, options.DepotId, branch, id), ct);
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 }),
             new UiCommand(
@@ -183,50 +195,87 @@ public sealed class App(
         {
             ct.ThrowIfCancellationRequested();
             
-            var update = await CheckForAppUpdate();
-            if (update is not null)
+            var updates = await CheckForAppUpdates();
+            if (updates.Count > 0)
             {
-                await AddUpdateToDatabase(update, ct);
-                await userInterface.AnnounceAsync(GetUpdateMessage(update));
+                await AddUpdatesToDatabase(updates, ct);
+                await userInterface.AnnounceAsync(GetUpdatesMessage(updates));
             }
             
             await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
         }
     }
 
-    private async Task<SteamAppVersion?> CheckForAppUpdate()
+    private async Task<List<SteamAppUpdate>> CheckForAppUpdates()
     {
-        var appVersion = await appSource.GetLatestAppVersionAsync(new SteamAppIdentifier(options.AppId, options.DepotId, options.BranchName));
-        var steamAppVersion = (SteamAppVersion) appVersion;
-        if (await TryGetManifestFromDatabase(steamAppVersion.ManifestId) is null)
-            return steamAppVersion;
-        return null;
+        var appVersions =
+            await appSource.GetLatestAppVersionsAsync(
+                new SteamAppIdentifier(options.AppId, options.DepotId, options.BranchNames));
+
+        return (await appVersions
+            .Cast<SteamAppVersion>()
+            .ToAsyncEnumerable()
+            .SelectAwait(async v => await GetUpdateFromVersion(v))
+            .Where(v => v is not null)
+            .ToListAsync())!;
     }
 
-    private async Task AddUpdateToDatabase(SteamAppVersion update, CancellationToken ct)
+    private async Task<SteamAppUpdate?> GetUpdateFromVersion(SteamAppVersion version)
     {
-        await context.SteamAppManifests.AddAsync(new SteamAppManifest
+        var existingManifest = await context.SteamAppManifests.FindAsync(version.ManifestId, version.BranchName);
+        if (existingManifest is not null)
+            return null;
+
+        var existingBranches = await context.SteamAppManifests
+            .AsNoTracking()
+            .Where(b => b.Id == version.ManifestId)
+            .ToListAsync();
+        
+        return new SteamAppUpdate
         {
-            Id = update.ManifestId,
+            Version = version,
+            PreviousBranches = existingBranches
+        };
+    }
+
+    private async Task AddUpdatesToDatabase(List<SteamAppUpdate> updates, CancellationToken ct)
+    {
+        await context.SteamAppManifests.AddRangeAsync(updates.Select(u => new SteamAppManifest
+        {
+            Id = u.Version.ManifestId,
+            BranchName = u.Version.BranchName,
             Handled = false
-        }, ct);
+        }), ct);
         await context.SaveChangesAsync(ct);
     }
+    
+    private static string GetUpdatesMessage(List<SteamAppUpdate> updates)
+    {
+        if (updates.Count == 0)
+            return "✅ The latest app versions are already fetched!";
+        
+        var builder = new StringBuilder("🔔 New app updates are detected!\n\n");
+        foreach (var update in updates)
+            if (update.PreviousBranches.Count == 0)
+                builder.Append(
+                    $"🟩 Manifest ID: **{update.Version.ManifestId}**\n" +
+                    $"▫️ Branch: `{update.Version.BranchName}`\n\n");
+            else
+                builder.Append(
+                    $"🟨 Manifest ID: **{update.Version.ManifestId}**\n" +
+                    $"▫️ Branch: `{update.Version.BranchName}`\n" +
+                    $"▫️ Previously seen on branches: {string.Join(", ",
+                        update.PreviousBranches.Select(b =>
+                            $"`{b.BranchName} ({GetTimestamp(b.CreatedAt)})`"))}\n\n");
 
-    private string GetUpdateMessage(SteamAppVersion? version) =>
-        version is null
-            ? "✅ The latest app version is already fetched!"
-            : $"🔔 A new app update is detected!\n" +
-              $"- App ID: **{options.AppId}**\n" +
-              $"- Depot ID: **{options.DepotId}**\n" +
-              $"- Branch: **{options.BranchName}**\n" +
-              $"- Manifest ID: **{version.ManifestId}**";
+        return builder.ToString();
+    }
 
     private async Task HandleSteam(IAppVersion appVersion, CancellationToken ct = default)
     {
         var steamAppVersion = (SteamAppVersion)appVersion;
         
-        var existingManifest = await TryGetManifestFromDatabase(steamAppVersion.ManifestId);
+        var existingManifest = await TryGetManifestFromDatabase(steamAppVersion.ManifestId, steamAppVersion.BranchName);
         if (existingManifest is not null && existingManifest.Handled)
         {
             await userInterface.AnnounceAsync("🎉 The manifest is already handled! No action will be performed.");
@@ -236,12 +285,18 @@ public sealed class App(
         if (existingManifest is null)
         {
             // Add it
-            logger.LogInformation("Adding manifest {ManifestId} to the database", steamAppVersion.ManifestId);
+            logger.LogInformation(
+                "Adding manifest {ManifestId} ({BranchName}) to the database",
+                steamAppVersion.ManifestId,
+                steamAppVersion.BranchName);
+            
             await context.SteamAppManifests.AddAsync(new SteamAppManifest
             {
                 Id = steamAppVersion.ManifestId,
+                BranchName = steamAppVersion.BranchName,
                 Handled = false
             }, ct);
+            
             await context.SaveChangesAsync(ct);
         }
 
@@ -275,7 +330,8 @@ public sealed class App(
         
         // Save the manifest
         logger.LogInformation("Updating the manifest with the new version");
-        var manifest = await context.SteamAppManifests.FindAsync(steamAppVersion.ManifestId);
+        var manifest =
+            await context.SteamAppManifests.FindAsync([steamAppVersion.ManifestId, steamAppVersion.BranchName], ct);
         if (manifest is null)
         {
             logger.LogError("The manifest is not found in the database");
@@ -353,10 +409,9 @@ public sealed class App(
             Description = options.PackageDescription,
             Version = new NuGetVersion(manifest.Version),
         };
-        packageBuilder.Authors.AddRange(options.PackageAuthors.Split(';'));
-        packageBuilder.DependencyGroups.Add(new PackageDependencyGroup(
-            targetFramework: NuGetFramework.Parse("netstandard2.0"),
-            packages: []));
+        packageBuilder.Authors.AddRange(options.PackageAuthors);
+        packageBuilder.DependencyGroups.Add(
+            new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
         
         foreach (var file in Directory.GetFiles(Cpp2IlOutputPath))
         {
@@ -453,6 +508,6 @@ public sealed class App(
         return unityBaseLibsPath;
     }
 
-    private ValueTask<SteamAppManifest?> TryGetManifestFromDatabase(ulong manifestId)
-        => context.SteamAppManifests.FindAsync(manifestId);
+    private ValueTask<SteamAppManifest?> TryGetManifestFromDatabase(ulong manifestId, string branchName)
+        => context.SteamAppManifests.FindAsync(manifestId, branchName);
 }
