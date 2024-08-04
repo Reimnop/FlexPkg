@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Mono.Cecil;
 using NuGet.Frameworks;
 using NuGet.Packaging;
+using NuGet.Packaging.Core;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -409,10 +410,14 @@ public sealed class App(
             Description = options.PackageDescription,
             Version = new NuGetVersion(manifest.Version),
         };
+
         packageBuilder.Authors.AddRange(options.PackageAuthors);
+        packageBuilder.ReleaseNotes = manifest.PatchNotes;
+        if (!string.IsNullOrWhiteSpace(options.PackageProjectUrl))
+            packageBuilder.ProjectUrl = new Uri(options.PackageProjectUrl);
         packageBuilder.DependencyGroups.Add(
             new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
-        
+
         foreach (var file in Directory.GetFiles(Cpp2IlOutputPath))
         {
             packageBuilder.Files.Add(new PhysicalPackageFile

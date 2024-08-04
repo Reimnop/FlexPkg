@@ -36,6 +36,9 @@ public sealed class CliOptions
 
     [Option("package-authors", Required = true, HelpText = "The authors of the NuGet package.")]
     public IEnumerable<string> PackageAuthors { get; set; } = [];
+
+    [Option("package-project-url", Required = false, HelpText = "The URL to the project. (e.g. source repository)")]
+    public string PackageProjectUrl { get; set; } = string.Empty;
     
     [Option("nuget-source", Required = false, HelpText = "The NuGet package source.")]
     public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";
