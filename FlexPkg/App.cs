@@ -168,6 +168,17 @@ public sealed class App(
                     ).ToListAsync(ct);
 
                     await interaction.RespondPaginatedAsync("Message", pages);
+                }),
+            new UiCommand(
+                "steamdb",
+                "SteamDB",
+                "Open the SteamDB page for the configured depot.",
+                [],
+                async (_, interaction) =>
+                {
+                    await interaction.RespondAsync(
+                        $"🔗 SteamDB: <https://steamdb.info/depot/{options.DepotId}/>", 
+                        error: true);
                 })
         ]);
         
