@@ -6,5 +6,5 @@ namespace FlexPkg;
 public class SteamAppUpdate
 {
     public required SteamAppVersion Version { get; set; }
-    public required List<SteamAppManifest> PreviousBranches { get; set; }
+    public required List<SteamAppManifest> ExistingBranches { get; set; }
 }

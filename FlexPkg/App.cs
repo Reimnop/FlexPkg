@@ -122,26 +122,50 @@ public sealed class App(
                         .OrderByDescending(m => m.CreatedAt)
                         .ToListAsync(ct);
 
-                    var pages = manifests.Chunk(3).Select(c => new UiPage(
+                    var pages = await manifests.Chunk(3).ToAsyncEnumerable().SelectAwait(async c => new UiPage(
                         "Title",
                         "Content",
-                        c.Select(m =>
+                        await c.ToAsyncEnumerable().SelectAwait(async m =>
                         {
-                            var builder = new StringBuilder($"Created At: {GetTimestamp(m.CreatedAt)}\n");
+                            var previousBranches = await context.SteamAppManifests
+                                .AsNoTracking()
+                                .Where(pm =>
+                                    pm.Id == m.Id &&
+                                    pm.BranchName != m.BranchName &&
+                                    pm.CreatedAt < m.CreatedAt)
+                                .OrderByDescending(pm => pm.CreatedAt)
+                                .ToListAsync(ct);
+                            
+                            var titleMarker = m.Handled? "🟩" : previousBranches.Count > 0 ? "🟨" : "🟥";
+                            var title = $"{titleMarker} {m.Id} (`{m.BranchName}`)";
+                            
+                            var builder = new StringBuilder();
                             
                             if (m.Handled)
-                                builder.Append($"Version: **{m.Version}**\n");
+                                builder.Append($"▫️ Version: **{m.Version}**\n");
                             else
-                                builder.Append("Version: *(not handled)*\n");
+                                builder.Append("▫️ Version: *(not handled)*\n");
+
+                            builder.Append($"▫️ Created At: {
+                                TimestampTag.FromDateTime(m.CreatedAt, TimestampTagStyles.ShortDateTime)
+                            }\n");
+
+                            if (previousBranches.Count > 0)
+                                builder.Append($"▫️ Previous Branches: {string.Join(", ", previousBranches.Select(
+                                    b => $"`{b.BranchName}` ({
+                                        TimestampTag.FromDateTime(b.CreatedAt, TimestampTagStyles.ShortDate)
+                                    })"))}\n");
                             
-                            if (string.IsNullOrWhiteSpace(m.PatchNotes))
-                                builder.Append("Patch Notes: *(none)*");
-                            else
-                                builder.Append($"Patch Notes:\n`{TruncateString(m.PatchNotes, 180)}`");
-                            
-                            return new UiPageSection($"{m.Id}", builder.ToString());
-                        }).ToList())
-                    ).ToList();
+                            if (m.Handled)
+                                if (string.IsNullOrWhiteSpace(m.PatchNotes))
+                                    builder.Append("▫️ Patch Notes: *(none)*");
+                                else
+                                    builder.Append($"▫️ Patch Notes:\n`{TruncateString(RegexUtils.StripLines()
+                                        .Replace(m.PatchNotes, "\n"), 180)}`");
+
+                            return new UiPageSection(title, builder.ToString());
+                        }).ToListAsync(ct))
+                    ).ToListAsync(ct);
 
                     await interaction.RespondPaginatedAsync("Message", pages);
                 })
@@ -154,9 +178,6 @@ public sealed class App(
         
         await Task.WhenAll(steamQueueTask, updateCheckTask);
     }
-
-    private static string GetTimestamp(DateTime dateTime) =>
-        TimestampTag.FormatFromDateTime(dateTime, TimestampTagStyles.ShortDateTime);
 
     private static string TruncateString(string value, int maxLength) =>
         value.Length <= maxLength
@@ -229,13 +250,14 @@ public sealed class App(
 
         var existingBranches = await context.SteamAppManifests
             .AsNoTracking()
-            .Where(b => b.Id == version.ManifestId)
+            .Where(b => b.Id == version.ManifestId && b.BranchName != version.BranchName)
+            .OrderByDescending(b => b.CreatedAt)
             .ToListAsync();
         
         return new SteamAppUpdate
         {
             Version = version,
-            PreviousBranches = existingBranches
+            ExistingBranches = existingBranches
         };
     }
 
@@ -257,17 +279,18 @@ public sealed class App(
         
         var builder = new StringBuilder("🔔 New app updates are detected!\n\n");
         foreach (var update in updates)
-            if (update.PreviousBranches.Count == 0)
+            if (update.ExistingBranches.Count == 0)
                 builder.Append(
                     $"🟩 Manifest ID: **{update.Version.ManifestId}**\n" +
                     $"▫️ Branch: `{update.Version.BranchName}`\n\n");
             else
                 builder.Append(
                     $"🟨 Manifest ID: **{update.Version.ManifestId}**\n" +
-                    $"▫️ Branch: `{update.Version.BranchName}`\n" +
-                    $"▫️ Previously seen on branches: {string.Join(", ",
-                        update.PreviousBranches.Select(b =>
-                            $"`{b.BranchName} ({GetTimestamp(b.CreatedAt)})`"))}\n\n");
+                    $"▫️ Branch: **`{update.Version.BranchName}`**\n" +
+                    $"▫️ Existing Branches: {string.Join(", ",
+                        update.ExistingBranches.Select(b => $"`{b.BranchName}` ({
+                            TimestampTag.FromDateTime(b.CreatedAt, TimestampTagStyles.ShortDate)
+                        })"))}\n\n");
 
         return builder.ToString();
     }
@@ -319,7 +342,10 @@ public sealed class App(
         // Open form
         var form = new Form(
             "Configure Manifest", 
-            $"App ID: **{steamAppVersion.AppId}**\nDepot ID: **{steamAppVersion.DepotId}**\nManifest ID: **{steamAppVersion.ManifestId}**", new[]
+            $"App ID: **{steamAppVersion.AppId}**\n" +
+            $"Depot ID: **{steamAppVersion.DepotId}**\n" +
+            $"Manifest ID: **{steamAppVersion.ManifestId}**\n" +
+            $"Branch: `{steamAppVersion.BranchName}`", new[]
         {
             new FormElement("version", "Version"),
             new FormElement("patch_notes", "Patch Notes", true),
