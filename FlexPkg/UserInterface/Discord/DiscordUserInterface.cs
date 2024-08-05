@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Discord;
+using Discord.Rest;
+using Discord.Webhook;
 using Discord.WebSocket;
+using FlexPkg.Data;
 using Microsoft.Extensions.Logging;
 
 namespace FlexPkg.UserInterface.Discord;
@@ -16,6 +19,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
     private readonly string token;
     private readonly ulong guildId;
     private readonly ulong channelId;
+    private readonly string? webhookUrl;
     private readonly ILogger<DiscordUserInterface> logger;
 
     private readonly ConcurrentDictionary<string, ButtonExecutedCallback> buttonExecutedCallbacks = [];
@@ -30,6 +34,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         token = options.DiscordToken;
         guildId = options.GuildId;
         channelId = options.ChannelId;
+        webhookUrl = options.WebhookUrl;
         this.logger = logger;
 
         client.Log += ClientOnLogAsync;
@@ -99,13 +104,16 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                 return;
             }
             
-            var text = DiscordPaginationUtil.GetPageText(paginatedMessage.Content, nextIndex, paginatedMessage.Pages.Count);
-            var embed = DiscordPaginationUtil.GetUiPageEmbed(paginatedMessage.Pages[nextIndex]);
+            var embed = DiscordPaginationUtil.GetUiPageEmbed(
+                paginatedMessage.Pages[nextIndex],
+                paginatedMessage.CurrentPage,
+                paginatedMessage.Pages.Count);
+            
             var component = DiscordPaginationUtil.GetPaginationControls(nextIndex, paginatedMessage.Pages.Count);
             
             await arg.UpdateAsync(x =>
             {
-                x.Content = text;
+                x.Content = paginatedMessage.Content;
                 x.Embed = embed;
                 x.Components = component;
             });
@@ -291,10 +299,9 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
 
         const int initialPage = 0;
 
-        var text = DiscordPaginationUtil.GetPageText(message, initialPage, pages.Count);
-        var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage]);
+        var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage], initialPage, pages.Count);
         var component = DiscordPaginationUtil.GetPaginationControls(initialPage, pages.Count);
-        var socketMessage = await messageChannel.SendMessageAsync(text, embed: embed, components: component);
+        var socketMessage = await messageChannel.SendMessageAsync(message, embed: embed, components: component);
         var paginatedMessage = new DiscordPaginatedMessage
         {
             Id = socketMessage.Id,
@@ -388,6 +395,34 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         });
         
         return formResponse;
+    }
+
+    public async Task PushUpdateNotificationAsync(SteamAppManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(webhookUrl))
+            return;
+        
+        using var webhookClient = new DiscordWebhookClient(webhookUrl);
+        await webhookClient.SendMessageAsync(embeds:
+        [
+            new EmbedBuilder()
+                .WithTitle($"New Update - {manifest.Version} {(
+                    manifest.BranchName != "public" ? $"[{manifest.BranchName}] " : "")}")
+                .WithTimestamp(manifest.CreatedAt)
+                .WithFields([
+                    new EmbedFieldBuilder { Name = "Package Version", Value = manifest.Version, IsInline = true },
+                    new EmbedFieldBuilder { Name = "Manifest ID", Value = manifest.Id, IsInline = true },
+                    new EmbedFieldBuilder { Name = "Branch", Value = $"`{manifest.BranchName}`", IsInline = true },
+                    new EmbedFieldBuilder
+                    {
+                        Name = "Patch Notes",
+                        Value = string.IsNullOrWhiteSpace(manifest.PatchNotes)
+                            ? "*(none)*"
+                            : $"```{manifest.PatchNotes}```",
+                    }
+                ])
+                .Build()
+        ]);
     }
 
     private string GetRandomId()

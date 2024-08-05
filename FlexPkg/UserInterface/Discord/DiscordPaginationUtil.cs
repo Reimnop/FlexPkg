@@ -9,11 +9,12 @@ public static class DiscordPaginationUtil
     public const string NextPageButtonId = "next_page";
     public const string LastPageButtonId = "last_page";
     
-    public static Embed GetUiPageEmbed(UiPage page)
+    public static Embed GetUiPageEmbed(UiPage page, int currentPageIndex, int pageCount)
     {
         var embedBuilder = new EmbedBuilder()
             .WithTitle(page.Title)
-            .WithDescription(page.Content);
+            .WithDescription(page.Content)
+            .WithFooter(new EmbedFooterBuilder().WithText($"{currentPageIndex + 1} / {pageCount}"));
 
         if (page.Sections is not null)
             foreach (var section in page.Sections)
@@ -31,7 +32,4 @@ public static class DiscordPaginationUtil
             .WithButton("⏭️", LastPageButtonId, ButtonStyle.Secondary, disabled: currentPageIndex == pageCount - 1);
         return componentBuilder.Build();
     }
-
-    public static string GetPageText(string message, int currentPageIndex, int pageCount)
-        => $"{message}\n\n**{currentPageIndex + 1} / {pageCount}**";
 }

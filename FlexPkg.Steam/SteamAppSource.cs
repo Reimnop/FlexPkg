@@ -19,11 +19,11 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         },
         steamHub => steamHub.Client.IsConnected);
     
-    public async Task<IAppVersion> GetLatestAppVersionAsync(IAppIdentifier appIdentifier)
+    public async Task<IEnumerable<IAppVersion>> GetLatestAppVersionsAsync(IAppIdentifier appIdentifier)
     {
         if (appIdentifier is not SteamAppIdentifier steamAppIdentifier)
             throw new InvalidCastException($"Invalid app identifier type, expected {typeof(SteamAppIdentifier)}");
-
+        
         var steamHub = await steamHubKeepAlive.GetOrCreateValue();
         var steamApps = steamHub.Apps;
         var picsGetProductInfoResult = await steamApps.PICSGetProductInfo(new SteamApps.PICSRequest(steamAppIdentifier.AppId), null);
@@ -32,9 +32,14 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         
         var productInfo = picsGetProductInfoResult.Results![0].Apps[steamAppIdentifier.AppId];
         var depotId = steamAppIdentifier.DepotId.ToString(CultureInfo.InvariantCulture);
-        var branchName = steamAppIdentifier.BranchName;
-        var manifestId = productInfo.KeyValues["depots"][depotId]["manifests"][branchName]["gid"].AsString()!;
-        return new SteamAppVersion(steamAppIdentifier.AppId, steamAppIdentifier.DepotId, ulong.Parse(manifestId));
+        
+        return productInfo.KeyValues["depots"][depotId]["manifests"].Children
+            .Where(b => steamAppIdentifier.BranchNames.Contains(b.Name!))
+            .Select(b => new SteamAppVersion(
+                steamAppIdentifier.AppId,
+                steamAppIdentifier.DepotId,
+                b.Name!,
+                ulong.Parse(b["gid"].AsString()!)));
     }
 
     public async Task DownloadAppAsync(string path, IAppVersion appVersion)
