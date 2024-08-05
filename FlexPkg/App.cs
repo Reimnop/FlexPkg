@@ -507,6 +507,7 @@ public sealed class App(
         var repository = Repository.Factory.GetCoreV3(options.NuGet.Source);
         var resource = await repository.GetResourceAsync<PackageUpdateResource>();
         
+        // TODO: move it because if it doesn't throw Handled is still set to 1 and notification is sent (nerd emoji)
         try
         {
             await resource.Push(
