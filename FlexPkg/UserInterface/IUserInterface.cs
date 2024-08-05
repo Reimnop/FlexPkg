@@ -1,3 +1,5 @@
+using FlexPkg.Data;
+
 namespace FlexPkg.UserInterface;
 
 public interface IUserInterface
@@ -9,4 +11,5 @@ public interface IUserInterface
     Task AnnounceAsync(string message, UiFile? file = null);
     Task AnnouncePaginatedAsync(string message, IReadOnlyList<UiPage> pages);
     Task<FormResponse?> PromptFormAsync(Form form, bool hasFormSummary = true);
+    Task PushUpdateNotificationAsync(SteamAppManifest manifest);
 }

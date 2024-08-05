@@ -477,6 +477,9 @@ public sealed class App(
         await context.SaveChangesAsync(ct);
         
         await userInterface.AnnounceAsync("✅ All done. Thank you!");
+        
+        logger.LogInformation("Pushing update notification");
+        await userInterface.PushUpdateNotificationAsync(manifest);
     }
 
     private async Task PublishNuGetPackage(PackageBuilder packageBuilder)

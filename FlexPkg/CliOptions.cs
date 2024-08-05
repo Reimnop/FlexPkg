@@ -49,6 +49,9 @@ public sealed class CliOptions
     [Option("nuget-api-key", Required = false, HelpText = "The API key for the NuGet package source.")]
     public string NuGetApiKey { get; set; } = string.Empty;
     
+    [Option("webhook-url", Required = false, HelpText = "The Discord webhook URL.")]
+    public string? WebhookUrl { get; set; }
+    
 #if DEBUG
     [Option("debug-save-package-to-disk", Required = false, HelpText = "Saves the package to disk instead of upload.")]
     public bool DebugSavePackageToDisk { get; set; }

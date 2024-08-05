@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Discord;
+using Discord.Rest;
+using Discord.Webhook;
 using Discord.WebSocket;
+using FlexPkg.Data;
 using Microsoft.Extensions.Logging;
 
 namespace FlexPkg.UserInterface.Discord;
@@ -16,6 +19,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
     private readonly string token;
     private readonly ulong guildId;
     private readonly ulong channelId;
+    private readonly string? webhookUrl;
     private readonly ILogger<DiscordUserInterface> logger;
 
     private readonly ConcurrentDictionary<string, ButtonExecutedCallback> buttonExecutedCallbacks = [];
@@ -30,6 +34,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         token = options.DiscordToken;
         guildId = options.GuildId;
         channelId = options.ChannelId;
+        webhookUrl = options.WebhookUrl;
         this.logger = logger;
 
         client.Log += ClientOnLogAsync;
@@ -390,6 +395,34 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         });
         
         return formResponse;
+    }
+
+    public async Task PushUpdateNotificationAsync(SteamAppManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(webhookUrl))
+            return;
+        
+        using var webhookClient = new DiscordWebhookClient(webhookUrl);
+        await webhookClient.SendMessageAsync(embeds:
+        [
+            new EmbedBuilder()
+                .WithTitle($"New Update - {manifest.Version} {(
+                    manifest.BranchName != "public" ? $"[{manifest.BranchName}] " : "")}")
+                .WithTimestamp(manifest.CreatedAt)
+                .WithFields([
+                    new EmbedFieldBuilder { Name = "Package Version", Value = manifest.Version, IsInline = true },
+                    new EmbedFieldBuilder { Name = "Manifest ID", Value = manifest.Id, IsInline = true },
+                    new EmbedFieldBuilder { Name = "Branch", Value = $"`{manifest.BranchName}`", IsInline = true },
+                    new EmbedFieldBuilder
+                    {
+                        Name = "Patch Notes",
+                        Value = string.IsNullOrWhiteSpace(manifest.PatchNotes)
+                            ? "*(none)*"
+                            : $"```{manifest.PatchNotes}```",
+                    }
+                ])
+                .Build()
+        ]);
     }
 
     private string GetRandomId()
