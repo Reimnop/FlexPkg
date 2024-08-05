@@ -123,8 +123,8 @@ public sealed class App(
                         .ToListAsync(ct);
 
                     var pages = await manifests.Chunk(3).ToAsyncEnumerable().SelectAwait(async c => new UiPage(
-                        "Title",
-                        "Content",
+                        "Manifests",
+                        string.Empty,
                         await c.ToAsyncEnumerable().SelectAwait(async m =>
                         {
                             var previousBranches = await context.SteamAppManifests
@@ -167,7 +167,7 @@ public sealed class App(
                         }).ToListAsync(ct))
                     ).ToListAsync(ct);
 
-                    await interaction.RespondPaginatedAsync("Message", pages);
+                    await interaction.RespondPaginatedAsync(string.Empty, pages);
                 }),
             new UiCommand(
                 "steamdb",

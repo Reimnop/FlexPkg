@@ -99,13 +99,16 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                 return;
             }
             
-            var text = DiscordPaginationUtil.GetPageText(paginatedMessage.Content, nextIndex, paginatedMessage.Pages.Count);
-            var embed = DiscordPaginationUtil.GetUiPageEmbed(paginatedMessage.Pages[nextIndex]);
+            var embed = DiscordPaginationUtil.GetUiPageEmbed(
+                paginatedMessage.Pages[nextIndex],
+                paginatedMessage.CurrentPage,
+                paginatedMessage.Pages.Count);
+            
             var component = DiscordPaginationUtil.GetPaginationControls(nextIndex, paginatedMessage.Pages.Count);
             
             await arg.UpdateAsync(x =>
             {
-                x.Content = text;
+                x.Content = paginatedMessage.Content;
                 x.Embed = embed;
                 x.Components = component;
             });
@@ -291,10 +294,9 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
 
         const int initialPage = 0;
 
-        var text = DiscordPaginationUtil.GetPageText(message, initialPage, pages.Count);
-        var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage]);
+        var embed = DiscordPaginationUtil.GetUiPageEmbed(pages[initialPage], initialPage, pages.Count);
         var component = DiscordPaginationUtil.GetPaginationControls(initialPage, pages.Count);
-        var socketMessage = await messageChannel.SendMessageAsync(text, embed: embed, components: component);
+        var socketMessage = await messageChannel.SendMessageAsync(message, embed: embed, components: component);
         var paginatedMessage = new DiscordPaginatedMessage
         {
             Id = socketMessage.Id,
