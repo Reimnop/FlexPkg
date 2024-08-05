@@ -333,21 +333,6 @@ public sealed class App(
             
             await context.SaveChangesAsync(ct);
         }
-
-        await userInterface.AnnounceAsync("📦 An update is detected! Downloading...");
-        
-        logger.LogInformation("Cleaning up old files");
-        
-        if (Directory.Exists(DownloadPath))
-            Directory.Delete(DownloadPath, true);
-        
-        if (Directory.Exists(Cpp2IlOutputPath))
-            Directory.Delete(Cpp2IlOutputPath, true);
-        
-        logger.LogInformation("Downloading manifest {ManifestId}", steamAppVersion.ManifestId);
-        await appSource.DownloadAppAsync("output", appVersion);
-        
-        await userInterface.AnnounceAsync("🎉 The manifest has been downloaded and stored!");
         
         // Open form
         var form = new Form(
@@ -356,10 +341,10 @@ public sealed class App(
             $"Depot ID: **{steamAppVersion.DepotId}**\n" +
             $"Manifest ID: **{steamAppVersion.ManifestId}**\n" +
             $"Branch: `{steamAppVersion.BranchName}`", new[]
-        {
-            new FormElement("version", "Version"),
-            new FormElement("patch_notes", "Patch Notes", true),
-        });
+            {
+                new FormElement("version", "Version"),
+                new FormElement("patch_notes", "Patch Notes", true),
+            });
         
         var response = await userInterface.PromptFormAsync(form);
         if (response is null)
@@ -378,6 +363,19 @@ public sealed class App(
         manifest.Version = response.Values["version"];
         manifest.PatchNotes = response.Values["patch_notes"];
         await context.SaveChangesAsync(ct);
+
+        await userInterface.AnnounceAsync("📦 Downloading manifest...");
+        
+        logger.LogInformation("Cleaning up old files");
+        if (Directory.Exists(DownloadPath))
+            Directory.Delete(DownloadPath, true);
+        if (Directory.Exists(Cpp2IlOutputPath))
+            Directory.Delete(Cpp2IlOutputPath, true);
+        
+        logger.LogInformation("Downloading manifest {ManifestId}", steamAppVersion.ManifestId);
+        await appSource.DownloadAppAsync("output", appVersion);
+        
+        await userInterface.AnnounceAsync("🎉 The manifest has been downloaded and stored!");
         
         // Run Cpp2IL on it
         logger.LogInformation("Running Cpp2IL on manifest {ManifestId}", steamAppVersion.ManifestId);
