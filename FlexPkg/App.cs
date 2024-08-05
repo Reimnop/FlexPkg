@@ -126,16 +126,15 @@ public sealed class App(
                         string.Empty,
                         await c.ToAsyncEnumerable().SelectAwait(async m =>
                         {
-                            var previousBranches = await context.SteamAppManifests
+                            var otherBranches = await context.SteamAppManifests
                                 .AsNoTracking()
                                 .Where(pm =>
                                     pm.Id == m.Id &&
-                                    pm.BranchName != m.BranchName &&
-                                    pm.CreatedAt < m.CreatedAt)
+                                    pm.BranchName != m.BranchName)
                                 .OrderByDescending(pm => pm.CreatedAt)
                                 .ToListAsync(ct);
                             
-                            var titleMarker = m.Handled? "🟩" : previousBranches.Count > 0 ? "🟨" : "🟥";
+                            var titleMarker = m.Handled? "🟩" : otherBranches.Count > 0 ? "🟨" : "🟥";
                             var title = $"{titleMarker} {m.Id} (`{m.BranchName}`)";
                             
                             var builder = new StringBuilder();
@@ -149,8 +148,8 @@ public sealed class App(
                                 TimestampTag.FromDateTime(m.CreatedAt, TimestampTagStyles.ShortDateTime)
                             }\n");
 
-                            if (previousBranches.Count > 0)
-                                builder.Append($"▫️ Previous Branches: {string.Join(", ", previousBranches.Select(
+                            if (otherBranches.Count > 0)
+                                builder.Append($"▫️ Other Branches: {string.Join(", ", otherBranches.Select(
                                     b => $"`{b.BranchName}` ({
                                         TimestampTag.FromDateTime(b.CreatedAt, TimestampTagStyles.ShortDate)
                                     })"))}\n");

@@ -28,6 +28,9 @@ public sealed class CliOptions
     [Option('b', "branches", Required = false, HelpText = "The Steam branches names.")]
     public IEnumerable<string> BranchNames { get; set; } = ["public"];
     
+    [Option("db", Required = true, HelpText = "The path to the SQLite database file.")]
+    public string DbPath { get; set; } = string.Empty;
+    
     [Option("package-name", Required = true, HelpText = "The name of the NuGet package.")]
     public string PackageName { get; set; } = string.Empty;
     

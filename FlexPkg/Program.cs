@@ -16,7 +16,7 @@ var options = parserResult.Value;
 var serviceCollection = new ServiceCollection();
 serviceCollection.AddLogging(builder => builder.AddConsole());
 serviceCollection.AddSingleton(options);
-serviceCollection.AddSqlite<FlexPkgContext>("Data Source=FlexPkg.db");
+serviceCollection.AddSqlite<FlexPkgContext>($"Data Source={options.DbPath}");
 serviceCollection.AddSingleton<IUserInterface, DiscordUserInterface>();
 serviceCollection.AddTransient<SteamTokenStore>();
 serviceCollection.AddTransient<SteamAuthenticator>();
