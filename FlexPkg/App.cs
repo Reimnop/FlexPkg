@@ -14,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Mono.Cecil;
 using NuGet.Frameworks;
 using NuGet.Packaging;
-using NuGet.Packaging.Core;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -352,7 +351,7 @@ public sealed class App(
         
         // Open form
         var form = new Form(
-            "Configure Manifest", 
+            "Configure Manifest", // TODO: remove app and depot ids, they're already known
             $"App ID: **{steamAppVersion.AppId}**\n" +
             $"Depot ID: **{steamAppVersion.DepotId}**\n" +
             $"Manifest ID: **{steamAppVersion.ManifestId}**\n" +
@@ -450,10 +449,21 @@ public sealed class App(
 
         packageBuilder.Authors.AddRange(options.PackageAuthors);
         packageBuilder.ReleaseNotes = manifest.PatchNotes;
-        if (!string.IsNullOrWhiteSpace(options.PackageProjectUrl))
-            packageBuilder.ProjectUrl = new Uri(options.PackageProjectUrl);
         packageBuilder.DependencyGroups.Add(
             new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
+        
+        if (!string.IsNullOrWhiteSpace(options.PackageProjectUrl))
+            packageBuilder.ProjectUrl = new Uri(options.PackageProjectUrl);
+
+        if (!string.IsNullOrWhiteSpace(options.PackageIcon))
+        {
+            packageBuilder.Files.Add(new PhysicalPackageFile
+            {
+                SourcePath = options.PackageIcon,
+                TargetPath = "icon.png",
+            });
+            packageBuilder.Icon = "icon.png";
+        }
 
         foreach (var file in Directory.GetFiles(Cpp2IlOutputPath))
         {
@@ -498,7 +508,7 @@ public sealed class App(
         try
         {
             await resource.Push(
-                packagePaths: [ path ],
+                packagePaths: [path],
                 symbolSource: null,
                 timeoutInSecond: 5 * 60,
                 disableBuffering: false,
@@ -513,8 +523,11 @@ public sealed class App(
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while pushing NuGet package");
-            await userInterface.AnnounceAsync("🚨 An error occurred while pushing NuGet package. Please check the logs.");
+            await userInterface.AnnounceAsync(
+                "🚨 An error occurred while pushing NuGet package. Please check the logs.");
         }
+        
+        File.Delete(path);
     }
 
     private async Task<string?> GetUnityBaseLibsPath(int[] unityVersion)

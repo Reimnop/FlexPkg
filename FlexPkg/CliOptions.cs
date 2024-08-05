@@ -40,6 +40,9 @@ public sealed class CliOptions
     [Option("package-project-url", Required = false, HelpText = "The URL to the project. (e.g. source repository)")]
     public string PackageProjectUrl { get; set; } = string.Empty;
     
+    [Option("package-icon", Required = false, HelpText = "Path to the icon file for the NuGet package.")]
+    public string? PackageIcon { get; set; }
+    
     [Option("nuget-source", Required = false, HelpText = "The NuGet package source.")]
     public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";
     
