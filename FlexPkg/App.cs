@@ -336,9 +336,7 @@ public sealed class App(
         
         // Open form
         var form = new Form(
-            "Configure Manifest", // TODO: remove app and depot ids, they're already known
-            $"App ID: **{steamAppVersion.AppId}**\n" +
-            $"Depot ID: **{steamAppVersion.DepotId}**\n" +
+            "Configure Manifest",
             $"Manifest ID: **{steamAppVersion.ManifestId}**\n" +
             $"Branch: `{steamAppVersion.BranchName}`", new[]
             {
