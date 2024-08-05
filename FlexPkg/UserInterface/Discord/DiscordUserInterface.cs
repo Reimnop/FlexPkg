@@ -5,6 +5,7 @@ using Discord.Webhook;
 using Discord.WebSocket;
 using FlexPkg.Data;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FlexPkg.UserInterface.Discord;
 
@@ -29,12 +30,14 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
 
     private readonly CancellationTokenSource paginationTimeoutTaskCts = new();
 
-    public DiscordUserInterface(CliOptions options, ILogger<DiscordUserInterface> logger)
+    public DiscordUserInterface(IOptions<AppOptions> options, ILogger<DiscordUserInterface> logger)
     {
-        token = options.DiscordToken;
-        guildId = options.GuildId;
-        channelId = options.ChannelId;
-        webhookUrl = options.WebhookUrl;
+        var discordOptions = options.Value.Discord;
+        
+        token = discordOptions.Token;
+        guildId = discordOptions.GuildId;
+        channelId = discordOptions.ChannelId;
+        webhookUrl = discordOptions.WebhookUrl;
         this.logger = logger;
 
         client.Log += ClientOnLogAsync;

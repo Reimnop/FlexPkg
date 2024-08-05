@@ -11,6 +11,7 @@ using Il2CppInterop.Common;
 using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Mono.Cecil;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -22,10 +23,10 @@ using NullLogger = NuGet.Common.NullLogger;
 namespace FlexPkg;
 
 public sealed class App(
-    CliOptions options,
     FlexPkgContext context,
     IAppSource appSource,
     IUserInterface userInterface,
+    IOptions<AppOptions> options,
     ILogger<App> logger)
 {
     private const string DownloadPath = "output";
@@ -36,6 +37,7 @@ public sealed class App(
     
     private static readonly object Cpp2IlLock = new();
 
+    private readonly AppOptions options = options.Value;
     private SteamCheckTaskDelegate? steamCheckTaskDelegate;
     
     public async Task RunAsync(CancellationToken ct = default)
@@ -92,9 +94,10 @@ public sealed class App(
                         return;
                     }
 
-                    if (interaction.Arguments["branch"] is not string branch || !options.BranchNames.Contains(branch))
+                    if (interaction.Arguments["branch"] is not string branch ||
+                        !options.Steam.BranchNames.Contains(branch))
                     {
-                        var branches = string.Join(", ", options.BranchNames.Select(b => $"`{b}`"));
+                        var branches = string.Join(", ", options.Steam.BranchNames.Select(b => $"`{b}`"));
                         await interaction.RespondAsync($"❌ Invalid branch name. ({branches})", error: true);
                         return;
                     }
@@ -106,7 +109,7 @@ public sealed class App(
                     }
                     
                     steamCheckTaskDelegate = ct =>
-                        HandleSteam(new SteamAppVersion(options.AppId, options.DepotId, branch, id), ct);
+                        HandleSteam(new SteamAppVersion(options.Steam.AppId, options.Steam.DepotId, branch, id), ct);
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 }),
             new UiCommand(
@@ -175,7 +178,7 @@ public sealed class App(
                 async (_, interaction) =>
                 {
                     await interaction.RespondAsync(
-                        $"🔗 SteamDB: <https://steamdb.info/depot/{options.DepotId}/>", 
+                        $"🔗 SteamDB: <https://steamdb.info/depot/{options.Steam.DepotId}/>", 
                         error: true);
                 })
         ]);
@@ -241,7 +244,7 @@ public sealed class App(
     {
         var appVersions =
             await appSource.GetLatestAppVersionsAsync(
-                new SteamAppIdentifier(options.AppId, options.DepotId, options.BranchNames));
+                new SteamAppIdentifier(options.Steam.AppId, options.Steam.DepotId, options.Steam.BranchNames));
 
         return (await appVersions
             .Cast<SteamAppVersion>()
@@ -437,24 +440,24 @@ public sealed class App(
         await userInterface.AnnounceAsync("📦 Building NuGet package...");
         var packageBuilder = new PackageBuilder
         {
-            Id = options.PackageName,
-            Description = options.PackageDescription,
+            Id = options.Package.Name,
+            Description = options.Package.Description,
             Version = new NuGetVersion(manifest.Version),
         };
 
-        packageBuilder.Authors.AddRange(options.PackageAuthors);
+        packageBuilder.Authors.AddRange(options.Package.Authors);
         packageBuilder.ReleaseNotes = manifest.PatchNotes;
         packageBuilder.DependencyGroups.Add(
             new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
         
-        if (!string.IsNullOrWhiteSpace(options.PackageProjectUrl))
-            packageBuilder.ProjectUrl = new Uri(options.PackageProjectUrl);
+        if (!string.IsNullOrWhiteSpace(options.Package.ProjectUrl))
+            packageBuilder.ProjectUrl = new Uri(options.Package.ProjectUrl);
 
-        if (!string.IsNullOrWhiteSpace(options.PackageIcon))
+        if (!string.IsNullOrWhiteSpace(options.Package.IconPath))
         {
             packageBuilder.Files.Add(new PhysicalPackageFile
             {
-                SourcePath = options.PackageIcon,
+                SourcePath = options.Package.IconPath,
                 TargetPath = "icon.png",
             });
             packageBuilder.Icon = "icon.png";
@@ -490,7 +493,8 @@ public sealed class App(
         if (options.DebugSavePackageToDisk)
         {
             await userInterface.AnnounceAsync("⚠️ DEBUG: Package will be saved to disk instead of uploaded.");
-            await using var fileStream = File.Open($"{options.PackageName}.{packageBuilder.Version}.nupkg", FileMode.Create);
+            await using var fileStream =
+                File.Open($"{options.Package.Name}.{packageBuilder.Version}.nupkg", FileMode.Create);
             packageBuilder.Save(fileStream);
             return;
         }
@@ -500,7 +504,7 @@ public sealed class App(
         await using (var fileStream = File.Open(path, FileMode.Create))
             packageBuilder.Save(fileStream);
         
-        var repository = Repository.Factory.GetCoreV3(options.NuGetSource);
+        var repository = Repository.Factory.GetCoreV3(options.NuGet.Source);
         var resource = await repository.GetResourceAsync<PackageUpdateResource>();
         
         try
@@ -510,7 +514,7 @@ public sealed class App(
                 symbolSource: null,
                 timeoutInSecond: 5 * 60,
                 disableBuffering: false,
-                getApiKey: _ => options.NuGetApiKey,
+                getApiKey: _ => options.NuGet.ApiKey,
                 getSymbolApiKey: _ => null,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
