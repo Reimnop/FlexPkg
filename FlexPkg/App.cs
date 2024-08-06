@@ -168,7 +168,10 @@ public sealed class App(
                         }).ToListAsync(ct))
                     ).ToListAsync(ct);
 
-                    await interaction.RespondPaginatedAsync(string.Empty, pages);
+                    if (pages.Count > 0)
+                        await interaction.RespondPaginatedAsync(string.Empty, pages);
+                    else
+                        await interaction.RespondAsync("📝 Nothing to show!");
                 }),
             new UiCommand(
                 "steamdb",
@@ -507,30 +510,18 @@ public sealed class App(
         var repository = Repository.Factory.GetCoreV3(options.NuGet.Source);
         var resource = await repository.GetResourceAsync<PackageUpdateResource>();
         
-        // TODO: move it because if it doesn't throw Handled is still set to 1 and notification is sent (nerd emoji)
-        try
-        {
-            await resource.Push(
-                packagePaths: [path],
-                symbolSource: null,
-                timeoutInSecond: 5 * 60,
-                disableBuffering: false,
-                getApiKey: _ => options.NuGet.ApiKey,
-                getSymbolApiKey: _ => null,
-                noServiceEndpoint: false,
-                skipDuplicate: false,
-                symbolPackageUpdateResource: null,
-                allowInsecureConnections: false,
-                log: NullLogger.Instance);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "An error occurred while pushing NuGet package");
-            await userInterface.AnnounceAsync(
-                "🚨 An error occurred while pushing NuGet package. Please check the logs.");
-        }
-        
-        File.Delete(path);
+        await resource.Push(
+            packagePaths: [path],
+            symbolSource: null,
+            timeoutInSecond: 5 * 60,
+            disableBuffering: false,
+            getApiKey: _ => options.NuGet.ApiKey,
+            getSymbolApiKey: _ => null,
+            noServiceEndpoint: false,
+            skipDuplicate: false,
+            symbolPackageUpdateResource: null,
+            allowInsecureConnections: false,
+            log: NullLogger.Instance);
     }
 
     private async Task<string?> GetUnityBaseLibsPath(int[] unityVersion)
