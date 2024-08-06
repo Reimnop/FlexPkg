@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.IO.MemoryMappedFiles;
 using FlexPkg.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -63,8 +64,6 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         var key = await steamApps.GetDepotDecryptionKey(steamAppVersion.DepotId, steamAppVersion.AppId);
         var manifest = await DownloadManifestAsync(cdnClient, steamAppVersion.DepotId, steamAppVersion.ManifestId, code, servers, key.DepotKey);
         
-        logger.LogInformation("Downloading files for Steam game");
-        
         logger.LogInformation("Preserving storage for all files");
         
         // Initialize all files
@@ -83,48 +82,69 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         
         // Filter out files that have no size or chunks
         var files = manifest.Files!.Where(file => file.TotalSize != 0 && file.Chunks.Count != 0);
-        var chunks = files.SelectMany(file => file.Chunks.Select(chunk => (file.FileName, chunk, 0)));
-        var chunkQueue = new ConcurrentQueue<(string, DepotManifest.ChunkData, int)>(chunks);
-
-        const int maxRetries = 8;
         
-        // Download all the files in parallel
-        var tasks = new List<Task>(12);
-        for (var i = 0; i < 12; i++)
-        {
-            tasks.Add(Task.Run(async () =>
+        logger.LogInformation("Mapping all preserved files to memory");
+        
+        // Memory map all files
+        var memoryMappedFiles = files
+            .Select(file =>
             {
-                while (chunkQueue.TryDequeue(out var tuple))
-                {
-                    var (fileName, chunk, retries) = tuple;
-                    
-                    try
-                    {
-                        // Get random server cause why not
-                        var server = servers[Random.Shared.Next(servers.Count)];
-                        var data = await cdnClient.DownloadDepotChunkAsync(steamAppVersion.DepotId, chunk, server, key.DepotKey);
-                        await using var fs = File.Open(Path.Combine(path, fileName), FileMode.Open, FileAccess.Write, FileShare.Write);
-                        fs.Position = (long) chunk.Offset;
-                        fs.Write(data.Data);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (retries >= maxRetries)
-                        {
-                            logger.LogError(ex, "Failed to download chunk after {MaxRetries} retries", maxRetries);
-                            throw;
-                        }
+                var filePath = Path.Combine(path, file.FileName);
+                return (file, MemoryMappedFile.CreateFromFile(filePath, FileMode.Open));
+            })
+            .ToList();
+        
+        logger.LogInformation("Downloading files");
+        try
+        {
+            var chunks = memoryMappedFiles.SelectMany(mmf => mmf.file.Chunks.Select(chunk => (mmf.Item2, chunk, 0)));
+            var chunkQueue = new ConcurrentQueue<(MemoryMappedFile, DepotManifest.ChunkData, int)>(chunks);
 
-                        logger.LogError(ex, "Failed to download chunk, retrying ({Count}/{MaxCount})", retries, maxRetries);
-                        chunkQueue.Enqueue((fileName, chunk, retries + 1));
+            const int maxRetries = 8;
+        
+            // Download all the files in parallel
+            var tasks = new List<Task>(12);
+            for (var i = 0; i < 12; i++)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    while (chunkQueue.TryDequeue(out var tuple))
+                    {
+                        var (mmf, chunk, retries) = tuple;
+                    
+                        try
+                        {
+                            // Get random server cause why not
+                            var server = servers[Random.Shared.Next(servers.Count)];
+                            var data = await cdnClient.DownloadDepotChunkAsync(steamAppVersion.DepotId, chunk, server, key.DepotKey);
+                            await using var view = mmf.CreateViewStream((long) chunk.Offset, chunk.UncompressedLength);
+                            await view.WriteAsync(data.Data);
+                        }
+                        catch (Exception ex)
+                        {
+                            if (retries >= maxRetries)
+                            {
+                                logger.LogError(ex, "Failed to download chunk after {MaxRetries} retries", maxRetries);
+                                throw;
+                            }
+
+                            logger.LogError(ex, "Failed to download chunk, retrying ({Count}/{MaxCount})", retries, maxRetries);
+                            chunkQueue.Enqueue((mmf, chunk, retries + 1));
+                        }
                     }
-                }
-            }));
+                }));
+            }
+        
+            await Task.WhenAll(tasks);
+        
+            logger.LogInformation("Finished!");
         }
-        
-        await Task.WhenAll(tasks);
-        
-        logger.LogInformation("Finished!");
+        finally
+        {
+            // Make sure we don't leak memory mapped files
+            foreach (var (_, mmf) in memoryMappedFiles)
+                mmf.Dispose();
+        }
     }
     
     private async Task<DepotManifest> DownloadManifestAsync(Client cdnClient, uint depotId, ulong manifestId, ulong manifestRequestCode, IEnumerable<Server> servers, byte[]? depotKey = null)

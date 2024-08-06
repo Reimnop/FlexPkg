@@ -1,0 +1,32 @@
+{
+  "DbPath": "userdata/FlexPkg.db",
+  "Discord": {
+    "Token": "put-a-discord-bot-token-here",
+    "GuildId": 999999999999999999,
+    "ChannelId": 999999999999999999,
+    "WebhookUrl": "https://put-a-webhook-url-here"
+  },
+  "Steam": {
+    "UserName": "yoursteamusername",
+    "Password": "yoursteampassword",
+    "AppId": 999999,
+    "DepotId": 999999,
+    "BranchNames": [
+      "public"
+    ]
+  },
+  "Package": {
+    "Name": "SomeGame.GameLibs",
+    "Description": "Reference libraries for Some Game modding",
+    "Authors": [
+      "yourname"
+    ],
+    "ProjectUrl": "https://github.com/Reimnop/FlexPkg",
+    "IconPath": "userdata/icon.png"
+  },
+  "NuGet": {
+    "Source": "https://api.nuget.org/v3/index.json",
+    "ApiKey": "your-nuget-api-key"
+  },
+  "DebugSavePackageToDisk": true
+}

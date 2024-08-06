@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "App Configuration",
+  "description": "Configuration schema for the FlexPkg application.",
+  "type": "object",
+  "properties": {
+    "DbPath": {
+      "description": "The path to the database file.",
+      "type": "string"
+    },
+    "Discord": {
+      "description": "Configuration settings for Discord integration.",
+      "type": "object",
+      "properties": {
+        "Token": {
+          "description": "The Discord bot token.",
+          "type": "string"
+        },
+        "GuildId": {
+          "description": "The Discord server (guild) ID.",
+          "type": "integer"
+        },
+        "ChannelId": {
+          "description": "The Discord channel ID.",
+          "type": "integer"
+        },
+        "WebhookUrl": {
+          "description": "The Discord webhook URL.",
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": ["Token", "GuildId", "ChannelId", "WebhookUrl"]
+    },
+    "Steam": {
+      "description": "Configuration settings for Steam integration.",
+      "type": "object",
+      "properties": {
+        "UserName": {
+          "description": "The Steam username.",
+          "type": "string"
+        },
+        "Password": {
+          "description": "The Steam password.",
+          "type": "string"
+        },
+        "AppId": {
+          "description": "The Steam application ID.",
+          "type": "integer"
+        },
+        "DepotId": {
+          "description": "The Steam depot ID.",
+          "type": "integer"
+        },
+        "BranchNames": {
+          "description": "The list of Steam branch names.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["UserName", "Password", "AppId", "DepotId", "BranchNames"]
+    },
+    "Package": {
+      "description": "Configuration settings for the package.",
+      "type": "object",
+      "properties": {
+        "Name": {
+          "description": "The name of the package.",
+          "type": "string"
+        },
+        "Description": {
+          "description": "A description of the package.",
+          "type": "string"
+        },
+        "Authors": {
+          "description": "A list of authors of the package.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ProjectUrl": {
+          "description": "The URL to the project repository.",
+          "type": "string",
+          "format": "uri"
+        },
+        "IconPath": {
+          "description": "The path to the package icon.",
+          "type": "string"
+        }
+      },
+      "required": ["Name", "Description", "Authors", "ProjectUrl", "IconPath"]
+    },
+    "NuGet": {
+      "description": "Configuration settings for NuGet integration.",
+      "type": "object",
+      "properties": {
+        "Source": {
+          "description": "The NuGet source URL.",
+          "type": "string",
+          "format": "uri"
+        },
+        "ApiKey": {
+          "description": "The API key for NuGet.",
+          "type": "string"
+        }
+      },
+      "required": ["Source", "ApiKey"]
+    }
+  },
+  "required": ["DbPath", "Discord", "Steam", "Package", "NuGet"]
+}
