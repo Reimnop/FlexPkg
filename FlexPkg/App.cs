@@ -39,9 +39,13 @@ public sealed class App(
 
     private readonly AppOptions options = options.Value;
     private SteamCheckTaskDelegate? steamCheckTaskDelegate;
+
+    private DateTime appStartTime;
     
     public async Task RunAsync(CancellationToken ct = default)
     {
+        appStartTime = DateTime.UtcNow;
+        
         // Initialize the UI
         await userInterface.InitializeAsync([
             new UiCommand(
@@ -50,6 +54,30 @@ public sealed class App(
                 "Pings the bot.",
                 [],
                 (ui, interaction) => interaction.RespondAsync($"🏓 Pong! Latency: **{ui.NetworkLatency}ms**.")),
+            new UiCommand(
+                "about",
+                "About",
+                "Shows information about the bot.",
+                [],
+                async (_, interaction) =>
+                {
+                    var version = typeof(App).Assembly.GetName().Version;
+                    var os = Environment.OSVersion.VersionString;
+                    var uptime = DateTime.UtcNow - appStartTime;
+                    var uptimeString = 
+                        Math.Floor(uptime.TotalDays) > 0
+                            ? $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m"
+                            : Math.Floor(uptime.TotalHours) > 0
+                                ? $"{uptime.Hours}h {uptime.Minutes}m"
+                                : Math.Floor(uptime.TotalMinutes) > 0
+                                    ? $"{uptime.Minutes}m"
+                                    : $"{uptime.Seconds}s";
+                    await interaction.RespondAsync(
+                        $"🤖 FlexPkg\n" +
+                        $"- Version: **{version}**\n" +
+                        $"- Operating System: **{os}**.\n" +
+                        $"- Uptime: **{uptimeString}**");
+                }),
             new UiCommand(
                 "check",
                 "Check",
