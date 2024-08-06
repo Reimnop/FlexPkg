@@ -381,6 +381,8 @@ public sealed class App(
         if (response is null)
             return;
         
+        // TODO: Validate version
+        
         // Save the manifest
         logger.LogInformation("Updating the manifest with the new version");
         var manifest =
