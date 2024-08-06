@@ -21,6 +21,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
     private readonly ulong guildId;
     private readonly ulong channelId;
     private readonly string? webhookUrl;
+    private readonly AppOptions.PackageOptions packageOptions;
     private readonly ILogger<DiscordUserInterface> logger;
 
     private readonly ConcurrentDictionary<string, ButtonExecutedCallback> buttonExecutedCallbacks = [];
@@ -38,6 +39,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         guildId = discordOptions.GuildId;
         channelId = discordOptions.ChannelId;
         webhookUrl = discordOptions.WebhookUrl;
+        packageOptions = options.Value.Package;
         this.logger = logger;
 
         client.Log += ClientOnLogAsync;
@@ -409,9 +411,15 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         await webhookClient.SendMessageAsync(embeds:
         [
             new EmbedBuilder()
-                .WithTitle($"New Update - {manifest.Version} {(
-                    manifest.BranchName != "public" ? $"[{manifest.BranchName}] " : "")}")
-                .WithTimestamp(manifest.CreatedAt)
+                .WithAuthor(new EmbedAuthorBuilder
+                {
+                    Name = packageOptions.Name,
+                    Url = $"https://www.nuget.org/packages/{packageOptions.Name}",
+                    IconUrl =
+                        $"https://api.nuget.org/v3-flatcontainer/{packageOptions.Name.ToLower()}/{manifest.Version}/icon" 
+                })
+                .WithTitle(
+                    $"New release: **{manifest.Version}** {(manifest.BranchName != "public" ? $"[{manifest.BranchName}] " : "")}")
                 .WithFields([
                     new EmbedFieldBuilder { Name = "Package Version", Value = manifest.Version, IsInline = true },
                     new EmbedFieldBuilder { Name = "Manifest ID", Value = manifest.Id, IsInline = true },
@@ -421,9 +429,11 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                         Name = "Patch Notes",
                         Value = string.IsNullOrWhiteSpace(manifest.PatchNotes)
                             ? "*(none)*"
-                            : $"```{manifest.PatchNotes}```",
+                            : $"```md\n{manifest.PatchNotes}```",
                     }
                 ])
+                .WithColor(0xDDAE73)
+                .WithTimestamp(manifest.CreatedAt)
                 .Build()
         ]);
     }
