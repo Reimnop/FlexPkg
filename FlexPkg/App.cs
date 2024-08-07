@@ -61,7 +61,7 @@ public sealed class App(
                 [],
                 async (_, interaction) =>
                 {
-                    var version = typeof(App).Assembly.GetName().Version;
+                    var version = typeof(App).Assembly.GetName().Version?.ToString(3);
                     var os = Environment.OSVersion.VersionString;
                     var uptime = DateTime.UtcNow - appStartTime;
                     var uptimeString = 
@@ -381,7 +381,12 @@ public sealed class App(
         if (response is null)
             return;
         
-        // TODO: Validate version
+        if (!NuGetVersion.TryParse(response.Values["version"], out _))
+        {
+            await userInterface.AnnounceAsync(
+                $"❌ `{response.Values["version"]}` is not a valid package version! (cancelled operation)");
+            return;
+        }
         
         // Save the manifest
         logger.LogInformation("Updating the manifest with the new version");
