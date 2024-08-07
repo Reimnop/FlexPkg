@@ -23,6 +23,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
     private readonly string? webhookUrl;
     private readonly string? webhookName;
     private readonly string? webhookAvatarUrl;
+    private readonly string? webhookPackageIconUrl;
     private readonly AppOptions.PackageOptions packageOptions;
     private readonly ILogger<DiscordUserInterface> logger;
 
@@ -43,6 +44,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         webhookUrl = discordOptions.WebhookUrl;
         webhookName = discordOptions.WebhookName;
         webhookAvatarUrl = discordOptions.WebhookAvatarUrl;
+        webhookPackageIconUrl = discordOptions.WebhookPackageIconUrl;
         packageOptions = options.Value.Package;
         this.logger = logger;
 
@@ -418,9 +420,10 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                 .WithAuthor(new EmbedAuthorBuilder
                 {
                     Name = packageOptions.Name,
-                    Url = $"https://www.nuget.org/packages/{packageOptions.Name}",
-                    IconUrl =
-                        $"https://api.nuget.org/v3-flatcontainer/{packageOptions.Name.ToLower()}/{manifest.Version}/icon" 
+                    Url = $"https://www.nuget.org/packages/{packageOptions.Name}/{manifest.Version}",
+                    IconUrl = string.IsNullOrWhiteSpace(webhookPackageIconUrl)
+                        ? $"https://api.nuget.org/v3-flatcontainer/{packageOptions.Name.ToLower()}/{manifest.Version}/icon"
+                        : webhookPackageIconUrl
                 })
                 .WithTitle(
                     $"New release: **{manifest.Version}** {(manifest.BranchName != "public" ? $"[{manifest.BranchName}] " : "")}")

@@ -37,6 +37,11 @@
           "description": "The Discord webhook avatar URL.",
           "type": "string",
           "format": "uri"
+        },
+        "WebhookPackageIconUrl": {
+          "description": "The URL for the embed package icon (if not specified, tries to use the icon from NuGet).",
+          "type": "string",
+          "format": "uri"
         }
       },
       "required": ["Token", "GuildId", "ChannelId"]

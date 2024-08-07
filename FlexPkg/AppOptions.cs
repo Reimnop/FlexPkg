@@ -20,6 +20,7 @@ public class AppOptions
         public string? WebhookUrl { get; set; }
         public string? WebhookName { get; set; }
         public string? WebhookAvatarUrl { get; set; }
+        public string? WebhookPackageIconUrl { get; set; }
     }
 
     public class SteamOptions

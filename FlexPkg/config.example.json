@@ -6,7 +6,8 @@
     "ChannelId": 999999999999999999,
     "WebhookUrl": "https://put-a-webhook-url-here",
     "WebhookName": "FlexPkg",
-    "WebhookAvatarUrl": "https://put-an-image-url-here"
+    "WebhookAvatarUrl": "https://put-an-image-url-here",
+    "WebhookPackageIconUrl": "https://put-an-image-url-here"
   },
   "Steam": {
     "UserName": "yoursteamusername",
