@@ -18,6 +18,8 @@ public class AppOptions
         public required ulong GuildId { get; set; }
         public required ulong ChannelId { get; set; }
         public string? WebhookUrl { get; set; }
+        public string? WebhookName { get; set; }
+        public string? WebhookAvatarUrl { get; set; }
     }
 
     public class SteamOptions

@@ -28,9 +28,18 @@
           "description": "The Discord webhook URL.",
           "type": "string",
           "format": "uri"
+        },
+        "WebhookName": {
+          "description": "The Discord webhook name.",
+          "type": "string"
+        },
+        "WebhookAvatarUrl": {
+          "description": "The Discord webhook avatar URL.",
+          "type": "string",
+          "format": "uri"
         }
       },
-      "required": ["Token", "GuildId", "ChannelId", "WebhookUrl"]
+      "required": ["Token", "GuildId", "ChannelId"]
     },
     "Steam": {
       "description": "Configuration settings for Steam integration.",

@@ -21,6 +21,8 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
     private readonly ulong guildId;
     private readonly ulong channelId;
     private readonly string? webhookUrl;
+    private readonly string? webhookName;
+    private readonly string? webhookAvatarUrl;
     private readonly AppOptions.PackageOptions packageOptions;
     private readonly ILogger<DiscordUserInterface> logger;
 
@@ -39,6 +41,8 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         guildId = discordOptions.GuildId;
         channelId = discordOptions.ChannelId;
         webhookUrl = discordOptions.WebhookUrl;
+        webhookName = discordOptions.WebhookName;
+        webhookAvatarUrl = discordOptions.WebhookAvatarUrl;
         packageOptions = options.Value.Package;
         this.logger = logger;
 
@@ -435,7 +439,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                 .WithColor(0xDDAE73)
                 .WithTimestamp(manifest.CreatedAt)
                 .Build()
-        ]);
+        ], username: webhookName, avatarUrl: webhookAvatarUrl);
     }
 
     private string GetRandomId()
