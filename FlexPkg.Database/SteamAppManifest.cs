@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace FlexPkg.Data;
+namespace FlexPkg.Database;
 
 [PrimaryKey(nameof(Id), nameof(BranchName))]
 public sealed class SteamAppManifest

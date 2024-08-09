@@ -1,5 +1,8 @@
 {
-  "DbPath": "userdata/FlexPkg.db",
+  "Database": {
+    "Provider": "sqlite;mysql;postgresql",
+    "ConnectionString": "put-a-connection-string-here"
+  },
   "Discord": {
     "Token": "put-a-discord-bot-token-here",
     "GuildId": 999999999999999999,

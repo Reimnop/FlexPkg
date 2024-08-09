@@ -1,9 +1,10 @@
 ﻿using CommandLine;
 using FlexPkg;
-using FlexPkg.Data;
+using FlexPkg.Database;
 using FlexPkg.Steam;
 using FlexPkg.UserInterface;
 using FlexPkg.UserInterface.Discord;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,12 @@ var options = configuration.Get<AppOptions>()!;
 serviceCollection.Configure<AppOptions>(configuration);
 
 serviceCollection.AddLogging(builder => builder.AddConsole());
-serviceCollection.AddSqlite<FlexPkgContext>($"Data Source={options.DbPath}");
+serviceCollection.AddDbContext<FlexPkgContext>(optionsBuilder =>
+{
+    var migrationsAssemblyName = DatabaseUtil.GetMigrationsAssemblyName(options.Database.Provider);
+    var databaseConnector = DatabaseUtil.GetDatabaseConnector(options.Database.Provider, migrationsAssemblyName);
+    databaseConnector(optionsBuilder, options.Database.ConnectionString);
+});
 serviceCollection.AddSingleton<IUserInterface, DiscordUserInterface>();
 serviceCollection.AddTransient<SteamTokenStore>();
 serviceCollection.AddTransient<SteamAuthenticator>();
@@ -35,10 +41,11 @@ serviceCollection.AddSingleton<App>();
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 
-// Make sure the database is created
+// Migrate the database
 var dbContext = serviceProvider.GetRequiredService<FlexPkgContext>();
-await dbContext.Database.EnsureCreatedAsync();
+await dbContext.Database.MigrateAsync();
 
+// Run the app
 var app = serviceProvider.GetRequiredService<App>();
 await app.RunAsync();
 return 0;

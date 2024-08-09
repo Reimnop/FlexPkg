@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace FlexPkg.Data;
+namespace FlexPkg.Database;
 
 public class FlexPkgContext(DbContextOptions<FlexPkgContext> options) : DbContext(options)
 {

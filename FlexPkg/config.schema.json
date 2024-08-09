@@ -4,9 +4,16 @@
   "description": "Configuration schema for the FlexPkg application.",
   "type": "object",
   "properties": {
-    "DbPath": {
-      "description": "The path to the database file.",
-      "type": "string"
+    "Database": {
+      "Provider": {
+        "description": "The database provider to use.",
+        "type": "string",
+        "enum": ["sqlite", "mysql", "mssql"]
+      },
+      "ConnectionString": {
+        "description": "The connection string to the database.",
+        "type": "string"
+      }
     },
     "Discord": {
       "description": "Configuration settings for Discord integration.",
@@ -124,5 +131,5 @@
       "required": ["Source", "ApiKey"]
     }
   },
-  "required": ["DbPath", "Discord", "Steam", "Package", "NuGet"]
+  "required": ["Database", "Discord", "Steam", "Package", "NuGet"]
 }

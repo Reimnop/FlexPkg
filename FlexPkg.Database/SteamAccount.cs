@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace FlexPkg.Data;
+namespace FlexPkg.Database;
 
 [PrimaryKey(nameof(Username))]
 public sealed class SteamAccount

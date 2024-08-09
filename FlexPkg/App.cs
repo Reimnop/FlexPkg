@@ -3,7 +3,7 @@ using System.Text;
 using Cpp2IL.Core;
 using Discord;
 using FlexPkg.Common;
-using FlexPkg.Data;
+using FlexPkg.Database;
 using Microsoft.Extensions.Logging;
 using FlexPkg.Steam;
 using FlexPkg.UserInterface;
@@ -63,20 +63,32 @@ public sealed class App(
                 {
                     var version = typeof(App).Assembly.GetName().Version?.ToString(3);
                     var os = Environment.OSVersion.VersionString;
-                    var uptime = DateTime.UtcNow - appStartTime;
-                    var uptimeString = 
-                        Math.Floor(uptime.TotalDays) > 0
-                            ? $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m"
-                            : Math.Floor(uptime.TotalHours) > 0
-                                ? $"{uptime.Hours}h {uptime.Minutes}m"
-                                : Math.Floor(uptime.TotalMinutes) > 0
-                                    ? $"{uptime.Minutes}m"
-                                    : $"{uptime.Seconds}s";
-                    await interaction.RespondAsync(
-                        $"🤖 FlexPkg\n" +
-                        $"- Version: **{version}**\n" +
-                        $"- Operating System: **{os}**.\n" +
-                        $"- Uptime: **{uptimeString}**");
+                    var dbConnection = context.Database.GetDbConnection();
+                    try
+                    {
+                        // ReSharper disable once MethodSupportsCancellation
+                        await dbConnection.OpenAsync();
+                        var databaseDisplay = $"{DatabaseUtil.GetProviderDisplayName(options.Database.Provider)} - {dbConnection.ServerVersion}";
+                        var uptime = DateTime.UtcNow - appStartTime;
+                        var uptimeString = 
+                            Math.Floor(uptime.TotalDays) > 0
+                                ? $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m"
+                                : Math.Floor(uptime.TotalHours) > 0
+                                    ? $"{uptime.Hours}h {uptime.Minutes}m"
+                                    : Math.Floor(uptime.TotalMinutes) > 0
+                                        ? $"{uptime.Minutes}m"
+                                        : $"{uptime.Seconds}s";
+                        await interaction.RespondAsync(
+                            $"🤖 FlexPkg\n" +
+                            $"- Version: **{version}**\n" +
+                            $"- Operating System: **{os}**.\n" +
+                            $"- Database: **{databaseDisplay}**\n" +
+                            $"- Uptime: **{uptimeString}**");
+                    }
+                    finally
+                    {
+                        await dbConnection.CloseAsync();
+                    }
                 }),
             new UiCommand(
                 "check",

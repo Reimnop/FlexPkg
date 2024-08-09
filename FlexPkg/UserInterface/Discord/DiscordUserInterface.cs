@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 using Discord;
-using Discord.Rest;
 using Discord.Webhook;
 using Discord.WebSocket;
-using FlexPkg.Data;
+using FlexPkg.Database;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

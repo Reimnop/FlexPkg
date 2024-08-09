@@ -2,7 +2,7 @@ namespace FlexPkg;
 
 public class AppOptions
 {
-    public required string DbPath { get; set; }
+    public required DatabaseOptions Database { get; set; }
     public required DiscordOptions Discord { get; set; }
     public required SteamOptions Steam { get; set; }
     public required PackageOptions Package { get; set; }
@@ -11,6 +11,12 @@ public class AppOptions
 #if DEBUG
     public required bool DebugSavePackageToDisk { get; set; }
 #endif
+
+    public class DatabaseOptions
+    {
+        public required string Provider { get; set; }
+        public required string ConnectionString { get; set; }
+    }
     
     public class DiscordOptions
     {
