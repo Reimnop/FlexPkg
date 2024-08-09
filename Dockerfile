@@ -8,6 +8,10 @@ WORKDIR /src
 COPY ["FlexPkg/FlexPkg.csproj", "FlexPkg/"]
 COPY ["FlexPkg.Common/FlexPkg.Common.csproj", "FlexPkg.Common/"]
 COPY ["FlexPkg.Steam/FlexPkg.Steam.csproj", "FlexPkg.Steam/"]
+COPY ["FlexPkg.Database/FlexPkg.Database.csproj", "FlexPkg.Database/"]
+COPY ["FlexPkg.SqliteMigrations/FlexPkg.SqliteMigrations.csproj", "FlexPkg.SqliteMigrations/"]
+COPY ["FlexPkg.MySqlMigrations/FlexPkg.MySqlMigrations.csproj", "FlexPkg.MySqlMigrations/"]
+COPY ["FlexPkg.PostgreSqlMigrations/FlexPkg.PostgreSqlMigrations.csproj", "FlexPkg.PostgreSqlMigrations/"]
 RUN dotnet restore "FlexPkg/FlexPkg.csproj"
 COPY . .
 WORKDIR "/src/FlexPkg"
