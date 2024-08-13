@@ -201,7 +201,7 @@ public sealed class App(
                                 if (string.IsNullOrWhiteSpace(m.PatchNotes))
                                     builder.Append("▫️ Patch Notes: *(none)*");
                                 else
-                                    builder.Append($"▫️ Patch Notes:\n`{TruncateString(RegexUtils.StripLines()
+                                    builder.Append($"▫️ Patch Notes:\n`{StringUtils.Truncate(RegexUtils.StripLines()
                                         .Replace(m.PatchNotes, "\n"), 180)}`");
 
                             return new UiPageSection(title, builder.ToString());
@@ -233,11 +233,6 @@ public sealed class App(
         
         await Task.WhenAll(steamQueueTask, updateCheckTask);
     }
-
-    private static string TruncateString(string value, int maxLength) =>
-        value.Length <= maxLength
-            ? value
-            : value[..maxLength] + "...";
 
     private async Task ContinuouslyCheckForQueuedSteamTask(CancellationToken ct = default)
     {

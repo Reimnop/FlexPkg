@@ -382,7 +382,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
         {
             var formElementNameLookup = form.Elements.ToDictionary(x => x.Name, x => x.DisplayName);
             foreach (var (key, value) in formResponse.Values)
-                responseSummaryEmbed.AddField(formElementNameLookup[key], value);
+                responseSummaryEmbed.AddField(formElementNameLookup[key], StringUtils.Truncate(value, 1000));
 
             await modal.RespondAsync("✅ Form submitted successfully!", embed: responseSummaryEmbed.Build());
         }
@@ -435,7 +435,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                         Name = "Patch Notes",
                         Value = string.IsNullOrWhiteSpace(manifest.PatchNotes)
                             ? "*(none)*"
-                            : $"```md\n{manifest.PatchNotes}```",
+                            : $"```md\n{StringUtils.Truncate(manifest.PatchNotes, 1000)}```",
                     }
                 ])
                 .WithColor(0xDDAE73)
