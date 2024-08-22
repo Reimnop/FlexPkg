@@ -221,7 +221,7 @@ public sealed class App(
                 async (_, interaction) =>
                 {
                     await interaction.RespondAsync(
-                        $"🔗 SteamDB: <https://steamdb.info/depot/{options.Steam.DepotId}/>", 
+                        $"🔗 SteamDB: <https://steamdb.info/depot/{options.Steam.DepotId}/manifests/>",
                         error: true);
                 })
         ]);

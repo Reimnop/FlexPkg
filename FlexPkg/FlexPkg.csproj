@@ -5,8 +5,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.2.1</Version>
-    <AssemblyVersion>1.2.1</AssemblyVersion>
+    <Version>1.2.3</Version>
+    <AssemblyVersion>1.2.3</AssemblyVersion>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
@@ -41,12 +41,6 @@
     <ProjectReference Include="../FlexPkg.SqliteMigrations/FlexPkg.SqliteMigrations.csproj" />
     <ProjectReference Include="../FlexPkg.MySqlMigrations/FlexPkg.MySqlMigrations.csproj" />
     <ProjectReference Include="../FlexPkg.PostgreSqlMigrations/FlexPkg.PostgreSqlMigrations.csproj" />
-  </ItemGroup>
-  
-  <ItemGroup>
-    <Content Include="../.dockerignore">
-      <Link>.dockerignore</Link>
-    </Content>
   </ItemGroup>
   
   <ItemGroup>
