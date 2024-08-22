@@ -228,8 +228,8 @@ public sealed class App(
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
 
-        var steamQueueTask = ContinuouslyCheckForQueuedSteamTask(ct);
-        var updateCheckTask = ContinuouslyCheckForGameUpdate(ct);
+        var steamQueueTask = Task.Run(() => ContinuouslyCheckForQueuedSteamTask(ct), ct);
+        var updateCheckTask = Task.Run(() => ContinuouslyCheckForGameUpdate(ct), ct);
         
         await Task.WhenAll(steamQueueTask, updateCheckTask);
     }

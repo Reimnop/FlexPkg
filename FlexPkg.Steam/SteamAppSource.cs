@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.MemoryMappedFiles;
 using FlexPkg.Common;
@@ -60,7 +61,7 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         
         var servers = (await steamContent.GetServersForSteamPipe(null, 12)).ToList();
         var cdnClient = new Client(steamClient);
-        var code = await steamContent.GetManifestRequestCode(steamAppVersion.DepotId, steamAppVersion.AppId, steamAppVersion.ManifestId);
+        var code = await steamContent.GetManifestRequestCode(steamAppVersion.DepotId, steamAppVersion.AppId, steamAppVersion.ManifestId, steamAppVersion.BranchName);
         var key = await steamApps.GetDepotDecryptionKey(steamAppVersion.DepotId, steamAppVersion.AppId);
         var manifest = await DownloadManifestAsync(cdnClient, steamAppVersion.DepotId, steamAppVersion.ManifestId, code, servers, key.DepotKey);
         
