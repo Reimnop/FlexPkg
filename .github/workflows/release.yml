@@ -20,16 +20,20 @@ jobs:
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: 8.0.x
-#          cache: true
-#          cache-dependency-path: '**/packages.lock.json'
+          cache: true
+          cache-dependency-path: FlexPkg/packages.lock.json
 
       - name: Install dependencies
         run: dotnet restore
 
       - name: Build project
         run: dotnet publish -c Release FlexPkg
+        
+      - name: ZIP the build
+        run: |
+          zip -r FlexPkg.zip FlexPkg/bin/Release/net8.0/publish
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: FlexPkg/bin/Release/net8.0/publish/*
+          files: FlexPkg.zip
