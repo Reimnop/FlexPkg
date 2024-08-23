@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="FlexPkg" uuid="d51ecab2-8160-433a-a625-5d70404236e8">
-      <driver-ref>sqlite.xerial</driver-ref>
+    <data-source source="LOCAL" name="flexpkg@localhost" uuid="f4b03127-fda8-4d6c-a58b-88c922360b7e">
+      <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
-      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:D:\Projects\Programming\FlexPkg\FlexPkg\bin\Debug\net8.0\userdata\FlexPkg.db</jdbc-url>
-      <jdbc-additional-properties>
-        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
-      </jdbc-additional-properties>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://localhost:5432/flexpkg</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

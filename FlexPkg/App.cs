@@ -223,7 +223,32 @@ public sealed class App(
                     await interaction.RespondAsync(
                         $"🔗 SteamDB: <https://steamdb.info/depot/{options.Steam.DepotId}/manifests/>",
                         error: true);
+                }),
+#if DEBUG
+            new UiCommand(
+                "sql",
+                "SQL",
+                "[DEBUG] Run raw SQL queries for debug.",
+                [
+                    new UiCommandParameter(
+                        "query",
+                        "Query",
+                        "SQL query to run",
+                        UiCommandParameterType.String)
+                ],
+                async (_, interaction) =>
+                {
+                    var sql = interaction.Arguments.First().Value.ToString();
+                    if (sql is null)
+                    {
+                        await interaction.RespondAsync("❌ No query provided.", error: true);
+                        return;
+                    }
+
+                    var result = context.Database.SqlQueryRaw<object>(sql).ToList();
+                    await interaction.RespondAsync($"```{result}```");
                 })
+#endif
         ]);
         
         await userInterface.AnnounceAsync("✅ FlexPkg started!");
@@ -266,15 +291,32 @@ public sealed class App(
         while (!ct.IsCancellationRequested)
         {
             ct.ThrowIfCancellationRequested();
-            
-            var updates = await CheckForAppUpdates();
-            if (updates.Count > 0)
+
+            // TODO
+            await userInterface.AnnounceAsync("[DEV] Checking for updates...");
+            try
             {
-                await AddUpdatesToDatabase(updates, ct);
-                await userInterface.AnnounceAsync(GetUpdatesMessage(updates));
+                var updates = await CheckForAppUpdates();
+                if (updates.Count > 0)
+                {
+                    await AddUpdatesToDatabase(updates, ct);
+                    await userInterface.AnnounceAsync(GetUpdatesMessage(updates));
+                }
+                
+                // TODO
+                else
+                {
+                    await userInterface.AnnounceAsync("[DEV] No updates found!");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while checking for updates");
+                await userInterface.AnnounceAsync(
+                    "🚨 An error occurred while checking for updates. Please check the logs.");
             }
             
-            await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
+            await Task.Delay(TimeSpan.FromMinutes(1.0f), ct);
         }
     }
 
