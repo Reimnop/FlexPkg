@@ -31,7 +31,7 @@ jobs:
         
       - name: ZIP the build
         run: |
-          cd FlexPkg/bin/release/net8.0/publish
+          cd ./FlexPkg/bin/release/net8.0/publish
           zip -r FlexPkg.zip .
 
       - name: Create release
