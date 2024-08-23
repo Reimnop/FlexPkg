@@ -31,7 +31,8 @@ jobs:
         
       - name: ZIP the build
         run: |
-          zip -r FlexPkg.zip FlexPkg/bin/Release/net8.0/publish
+          cd FlexPkg/bin/release/net8.0/publish
+          zip -r FlexPkg.zip .
 
       - name: Create release
         uses: softprops/action-gh-release@v2
