@@ -27,14 +27,16 @@ jobs:
         run: dotnet restore
 
       - name: Build project
-        run: dotnet publish -c Release FlexPkg
-        
-      - name: ZIP the build
         run: |
-          cd /home/runner/work/FlexPkg/FlexPkg/FlexPkg/bin/Release/net8.0/publish
-          zip -r FlexPkg.zip .
+          dotnet publish -c Release -r win-x64 FlexPkg
+          dotnet publish -c Release -r linux-x64 FlexPkg
+        
+      - name: ZIP the build directories
+        run: |
+          zip -r FlexPkg-windows-x64.zip FlexPkg/bin/Release/net8.0/win-x64/publish/*
+          zip -r FlexPkg-linux-x64.zip FlexPkg/bin/Release/net8.0/linux-x64/publish/*
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: /home/runner/work/FlexPkg/FlexPkg/FlexPkg/bin/Release/net8.0/publish/FlexPkg.zip
+          files: FlexPkg-*.zip
