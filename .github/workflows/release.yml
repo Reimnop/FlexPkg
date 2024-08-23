@@ -30,9 +30,7 @@ jobs:
         run: dotnet publish -c Release FlexPkg
         
       - name: ZIP the build
-        run: |
-          cd ./FlexPkg/bin/release/net8.0/publish
-          zip -r FlexPkg.zip .
+        run: zip -r -j FlexPkg.zip FlexPkg/bin/Release/net8.0/publish
 
       - name: Create release
         uses: softprops/action-gh-release@v2
