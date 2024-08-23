@@ -1,0 +1,34 @@
+name: Publish GitHub release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    name: Publish release to GitHub
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.x
+          cache: true
+
+      - name: Install dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet publish -c Release FlexPkg
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: FlexPkg/bin/Release/net8.0/publish/*
