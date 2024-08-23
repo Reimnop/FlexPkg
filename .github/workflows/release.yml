@@ -1,4 +1,4 @@
-name: Publish GitHub release
+name: Publish release
 
 on:
   push:
@@ -43,3 +43,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: FlexPkg/bin/Release/net8.0/**/publish/FlexPkg-*.zip
+          body_path: CHANGELOG.md
