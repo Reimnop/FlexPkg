@@ -266,12 +266,19 @@ public sealed class App(
         while (!ct.IsCancellationRequested)
         {
             ct.ThrowIfCancellationRequested();
-            
-            var updates = await CheckForAppUpdates();
-            if (updates.Count > 0)
+
+            try
             {
-                await AddUpdatesToDatabase(updates, ct);
-                await userInterface.AnnounceAsync(GetUpdatesMessage(updates));
+                var updates = await CheckForAppUpdates();
+                if (updates.Count > 0)
+                {
+                    await AddUpdatesToDatabase(updates, ct);
+                    await userInterface.AnnounceAsync(GetUpdatesMessage(updates));
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred in app update check loop");
             }
             
             await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
