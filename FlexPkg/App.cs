@@ -111,6 +111,20 @@ public sealed class App(
 
                 }),
             new UiCommand(
+                "logout",
+                "Logout",
+                "Logs out and restarts the bot.",
+                [],
+                async (_, interaction) =>
+                {
+                    var steamAccounts = context.SteamAccounts;
+                    steamAccounts.RemoveRange(steamAccounts.Where(x => x.Username == options.Steam.UserName));
+                    await context.SaveChangesAsync(ct);
+                    await interaction.RespondAsync("🔒 Logged out!");
+                    
+                    Environment.Exit(0);
+                }),
+            new UiCommand(
                 "addmanifest",
                 "Add Manifest",
                 "Manually add a manifest to the database.",
