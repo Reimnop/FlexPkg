@@ -117,9 +117,10 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
                         {
                             // Get random server cause why not
                             var server = servers[Random.Shared.Next(servers.Count)];
-                            var data = await cdnClient.DownloadDepotChunkAsync(steamAppVersion.DepotId, chunk, server, key.DepotKey);
+                            var buffer = new byte[chunk.UncompressedLength];
+                            await cdnClient.DownloadDepotChunkAsync(steamAppVersion.DepotId, chunk, server, buffer, key.DepotKey);
                             await using var view = mmf.CreateViewStream((long) chunk.Offset, chunk.UncompressedLength);
-                            await view.WriteAsync(data.Data);
+                            await view.WriteAsync(buffer);
                         }
                         catch (Exception ex)
                         {
