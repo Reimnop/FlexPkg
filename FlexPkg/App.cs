@@ -106,7 +106,7 @@ public sealed class App(
                         return;
                     }
 
-                    await AddUpdatesToDatabase(updates, ct);
+                    await AddUpdatesToDatabase(updates);
                     await interaction.RespondAsync(GetUpdatesMessage(updates));
 
                 }),
@@ -119,7 +119,7 @@ public sealed class App(
                 {
                     var steamAccounts = context.SteamAccounts;
                     steamAccounts.RemoveRange(steamAccounts.Where(x => x.Username == options.Steam.UserName));
-                    await context.SaveChangesAsync(ct);
+                    await context.SaveChangesAsync();
                     await interaction.RespondAsync("🔒 Logged out!");
                     
                     Environment.Exit(0);
@@ -167,6 +167,43 @@ public sealed class App(
                     await interaction.RespondAsync("✅ The manifest has been queued for handling!");
                 }),
             new UiCommand(
+                "removemanifest",
+                "Remove Manifest",
+                "Manually remove a manifest from the database.",
+                [
+                    new UiCommandParameter(
+                        "id",
+                        "ID",
+                        "The ID of the manifest.",
+                        UiCommandParameterType.String),
+                ],
+                async (_, interaction) =>
+                {
+                    if (!ulong.TryParse(interaction.Arguments["id"] as string, out var id))
+                    {
+                        await interaction.RespondAsync("❌ Invalid manifest ID.", error: true);
+                        return;
+                    }
+                    
+                    if (steamCheckTaskDelegate is not null)
+                    {
+                        await interaction.RespondAsync("❌ A Steam handler job is already in progress.", error: true);
+                        return;
+                    }
+                    
+                    var manifest = await context.SteamAppManifests.FirstOrDefaultAsync(x => x.Id == id);
+                    if (manifest is null)
+                    {
+                        await interaction.RespondAsync("❌ The manifest is not found in the database.", error: true);
+                        return;
+                    }
+                    
+                    context.SteamAppManifests.Remove(manifest);
+                    await context.SaveChangesAsync();
+                    
+                    await interaction.RespondAsync("✅ The manifest has been removed from the database!");
+                }),
+            new UiCommand(
                 "listmanifests",
                 "List Manifests",
                 "Lists the manifests in the database.",
@@ -176,7 +213,7 @@ public sealed class App(
                     var manifests = await context.SteamAppManifests
                         .AsNoTracking()
                         .OrderByDescending(m => m.CreatedAt)
-                        .ToListAsync(ct);
+                        .ToListAsync();
 
                     var pages = await manifests.Chunk(3).ToAsyncEnumerable().SelectAwait(async c => new UiPage(
                         "Manifests",
@@ -189,7 +226,7 @@ public sealed class App(
                                     pm.Id == m.Id &&
                                     pm.BranchName != m.BranchName)
                                 .OrderByDescending(pm => pm.CreatedAt)
-                                .ToListAsync(ct);
+                                .ToListAsync();
                             
                             var titleMarker = m.Handled? "🟩" : otherBranches.Count > 0 ? "🟨" : "🟥";
                             var title = $"{titleMarker} {m.Id} (`{m.BranchName}`)";
@@ -219,8 +256,8 @@ public sealed class App(
                                         .Replace(m.PatchNotes, "\n"), 180)}`");
 
                             return new UiPageSection(title, builder.ToString());
-                        }).ToListAsync(ct))
-                    ).ToListAsync(ct);
+                        }).ToListAsync())
+                    ).ToListAsync();
 
                     if (pages.Count > 0)
                         await interaction.RespondPaginatedAsync(string.Empty, pages);
@@ -295,7 +332,7 @@ public sealed class App(
                 logger.LogError(ex, "An error occurred in app update check loop");
             }
             
-            await Task.Delay(TimeSpan.FromMinutes(5.0f), ct);
+            await Task.Delay(TimeSpan.FromMinutes(15.0f), ct);
         }
     }
 
@@ -332,7 +369,7 @@ public sealed class App(
         };
     }
 
-    private async Task AddUpdatesToDatabase(List<SteamAppUpdate> updates, CancellationToken ct)
+    private async Task AddUpdatesToDatabase(List<SteamAppUpdate> updates, CancellationToken ct = default)
     {
         await context.SteamAppManifests.AddRangeAsync(updates.Select(u => new SteamAppManifest
         {

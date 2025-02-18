@@ -11,22 +11,14 @@ using SteamKit2.CDN;
 
 namespace FlexPkg.Steam;
 
-public sealed class SteamAppSource(string username, string password, Func<IServiceProvider, IAuthenticator> authenticatorFactory, IServiceProvider serviceProvider, ILogger<SteamAppSource> logger) : IAppSource, IAsyncDisposable
+public sealed class SteamAppSource(string username, string password, Func<IServiceProvider, IAuthenticator> authenticatorFactory, IServiceProvider serviceProvider, ILogger<SteamAppSource> logger) : IAppSource
 {
-    private readonly AsyncKeepAlive<SteamHub> steamHubKeepAlive = new(
-        async () =>
-        {
-            var tokenStore = serviceProvider.GetRequiredService<ISteamTokenStore>();
-            return await SteamHub.CreateAsync(username, password, tokenStore, () => authenticatorFactory(serviceProvider));
-        },
-        steamHub => steamHub.Client.IsConnected);
-    
     public async Task<IEnumerable<IAppVersion>> GetLatestAppVersionsAsync(IAppIdentifier appIdentifier)
     {
         if (appIdentifier is not SteamAppIdentifier steamAppIdentifier)
             throw new InvalidCastException($"Invalid app identifier type, expected {typeof(SteamAppIdentifier)}");
-        
-        var steamHub = await steamHubKeepAlive.GetOrCreateValue();
+
+        await using var steamHub = await GetSteamHubAsync();
         var steamApps = steamHub.Apps;
         var picsGetProductInfoResult = await steamApps.PICSGetProductInfo(new SteamApps.PICSRequest(steamAppIdentifier.AppId), null);
         if (picsGetProductInfoResult.Failed)
@@ -51,7 +43,7 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         
         Directory.CreateDirectory(path);
         
-        var steamHub = await steamHubKeepAlive.GetOrCreateValue();
+        await using var steamHub = await GetSteamHubAsync();
         
         logger.LogInformation("Fetching manifest for Steam game");
         
@@ -166,8 +158,9 @@ public sealed class SteamAppSource(string username, string password, Func<IServi
         throw new Exception("Failed to download manifest from all servers");
     }
 
-    public async ValueTask DisposeAsync()
+    private async Task<SteamHub> GetSteamHubAsync()
     {
-        await steamHubKeepAlive.DisposeAsync();
+        var tokenStore = serviceProvider.GetRequiredService<ISteamTokenStore>();
+        return await SteamHub.CreateAsync(username, password, tokenStore, () => authenticatorFactory(serviceProvider));
     }
 }
