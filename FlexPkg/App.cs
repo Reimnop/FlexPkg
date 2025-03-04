@@ -320,6 +320,7 @@ public sealed class App(
 
             try
             {
+                logger.LogInformation("Checking for app update");
                 var updates = await CheckForAppUpdates();
                 if (updates.Count > 0)
                 {
