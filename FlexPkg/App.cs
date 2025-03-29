@@ -3,6 +3,7 @@ using System.Text;
 using AssetRipper.Primitives;
 using Cpp2IL.Core;
 using Cpp2IL.Core.Api;
+using Cpp2IL.Core.InstructionSets;
 using Discord;
 using FlexPkg.Common;
 using FlexPkg.Database;
@@ -12,6 +13,7 @@ using FlexPkg.UserInterface;
 using Il2CppInterop.Common;
 using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
+using LibCpp2IL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mono.Cecil;
@@ -518,7 +520,8 @@ public sealed class App(
                 logger.LogError("Could not determine the Unity version");
                 return;
             }
-
+            
+            InstructionSetRegistry.RegisterInstructionSet<X86InstructionSet>(new InstructionSetId("x86_64"));
             Cpp2IlApi.InitializeLibCpp2Il(
                 Path.Combine(DownloadPath, "GameAssembly.dll"),
                 Path.Combine(unityDataDirPath, "il2cpp_data/Metadata/global-metadata.dat"),
