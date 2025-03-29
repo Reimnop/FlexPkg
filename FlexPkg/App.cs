@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text;
+using AssetRipper.Primitives;
 using Cpp2IL.Core;
+using Cpp2IL.Core.Api;
 using Discord;
 using FlexPkg.Common;
 using FlexPkg.Database;
@@ -32,6 +34,7 @@ public sealed class App(
     private const string DownloadPath = "output";
     private const string Cpp2IlOutputPath = "cpp2il_output";
     private const string UnityBaseLibsPath = "unity_base_libs";
+    private const string TempPath = "temp";
     
     private delegate Task SteamCheckTaskDelegate(CancellationToken ct = default);
     
@@ -475,6 +478,8 @@ public sealed class App(
             Directory.Delete(DownloadPath, true);
         if (Directory.Exists(Cpp2IlOutputPath))
             Directory.Delete(Cpp2IlOutputPath, true);
+        if (Directory.Exists(TempPath))
+            Directory.Delete(TempPath, true);
         
         logger.LogInformation("Downloading manifest {ManifestId}", steamAppVersion.ManifestId);
         await appSource.DownloadAppAsync("output", appVersion);
@@ -486,7 +491,7 @@ public sealed class App(
         await userInterface.AnnounceAsync("🔧 Running Cpp2IL on the manifest...");
 
         // Since Cpp2Il is a singleton, we need to lock it
-        int[]? unityVersion;
+        UnityVersion unityVersion;
         List<AssemblyDefinition> dummyDlls;
         lock (Cpp2IlLock)
         {
@@ -507,7 +512,8 @@ public sealed class App(
             }
             
             unityVersion = Cpp2IlApi.DetermineUnityVersion(unityGameExePath, unityDataDirPath);
-            if (unityVersion is null)
+            
+            if (unityVersion == UnityVersion.MinVersion)
             {
                 logger.LogError("Could not determine the Unity version");
                 return;
@@ -516,10 +522,19 @@ public sealed class App(
             Cpp2IlApi.InitializeLibCpp2Il(
                 Path.Combine(DownloadPath, "GameAssembly.dll"),
                 Path.Combine(unityDataDirPath, "il2cpp_data/Metadata/global-metadata.dat"),
-                unityVersion,
-                false);
+                unityVersion);
 
-            dummyDlls = Cpp2IlApi.MakeDummyDLLs();
+            var outputFormat = OutputFormatRegistry.GetFormat("dummydll"); // ????
+            
+            var dummyDllOutputPath = Path.Combine(Cpp2IlOutputPath, "dummydll");
+            Directory.CreateDirectory(dummyDllOutputPath);
+            
+            outputFormat.DoOutput(Cpp2IlApi.CurrentAppContext, dummyDllOutputPath); // ??????????????
+            
+            // Load it using Cecil
+            dummyDlls = Directory.GetFiles(dummyDllOutputPath)
+                .Select(AssemblyDefinition.ReadAssembly)
+                .ToList();
         }
         // Don't need Cpp2IL anymore, unlock it
         
@@ -625,10 +640,10 @@ public sealed class App(
             log: NullLogger.Instance);
     }
 
-    private async Task<string?> GetUnityBaseLibsPath(int[] unityVersion)
+    private async Task<string?> GetUnityBaseLibsPath(UnityVersion unityVersion)
     {
         // Check if we already have it
-        var unityBaseLibsVersion = string.Join('.', unityVersion);
+        var unityBaseLibsVersion = $"{unityVersion.Major}.{unityVersion.Minor}.{unityVersion.Build}";
         var unityBaseLibsPath = Path.Combine(UnityBaseLibsPath, $"{unityBaseLibsVersion}");
         
         if (Directory.Exists(unityBaseLibsPath))
