@@ -526,7 +526,7 @@ public sealed class App(
 
             var outputFormat = OutputFormatRegistry.GetFormat("dummydll"); // ????
             
-            var dummyDllOutputPath = Path.Combine(Cpp2IlOutputPath, "dummydll");
+            var dummyDllOutputPath = Path.Combine(TempPath, "dummydll");
             Directory.CreateDirectory(dummyDllOutputPath);
             
             outputFormat.DoOutput(Cpp2IlApi.CurrentAppContext, dummyDllOutputPath); // ??????????????
