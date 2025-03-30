@@ -116,7 +116,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
             
             var embed = DiscordPaginationUtil.GetUiPageEmbed(
                 paginatedMessage.Pages[nextIndex],
-                paginatedMessage.CurrentPage,
+                nextIndex,
                 paginatedMessage.Pages.Count);
             
             var component = DiscordPaginationUtil.GetPaginationControls(nextIndex, paginatedMessage.Pages.Count);
