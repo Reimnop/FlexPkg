@@ -4,6 +4,8 @@ using AssetRipper.Primitives;
 using Cpp2IL.Core;
 using Cpp2IL.Core.Api;
 using Cpp2IL.Core.InstructionSets;
+using Cpp2IL.Core.OutputFormats;
+using Cpp2IL.Core.ProcessingLayers;
 using Discord;
 using FlexPkg.Common;
 using FlexPkg.Database;
@@ -36,7 +38,6 @@ public sealed class App(
     private const string DownloadPath = "output";
     private const string Cpp2IlOutputPath = "cpp2il_output";
     private const string UnityBaseLibsPath = "unity_base_libs";
-    private const string TempPath = "temp";
     
     private delegate Task SteamCheckTaskDelegate(CancellationToken ct = default);
     
@@ -480,8 +481,6 @@ public sealed class App(
             Directory.Delete(DownloadPath, true);
         if (Directory.Exists(Cpp2IlOutputPath))
             Directory.Delete(Cpp2IlOutputPath, true);
-        if (Directory.Exists(TempPath))
-            Directory.Delete(TempPath, true);
         
         logger.LogInformation("Downloading manifest {ManifestId}", steamAppVersion.ManifestId);
         await appSource.DownloadAppAsync("output", appVersion);
@@ -520,24 +519,34 @@ public sealed class App(
                 logger.LogError("Could not determine the Unity version");
                 return;
             }
-            
-            InstructionSetRegistry.RegisterInstructionSet<X86InstructionSet>(new InstructionSetId("x86_64"));
-            Cpp2IlApi.InitializeLibCpp2Il(
-                Path.Combine(DownloadPath, "GameAssembly.dll"),
-                Path.Combine(unityDataDirPath, "il2cpp_data/Metadata/global-metadata.dat"),
-                unityVersion);
 
-            var outputFormat = OutputFormatRegistry.GetFormat("dummydll"); // ????
-            
-            var dummyDllOutputPath = Path.Combine(TempPath, "dummydll");
-            Directory.CreateDirectory(dummyDllOutputPath);
-            
-            outputFormat.DoOutput(Cpp2IlApi.CurrentAppContext, dummyDllOutputPath); // ??????????????
-            
-            // Load it using Cecil
-            dummyDlls = Directory.GetFiles(dummyDllOutputPath)
-                .Select(AssemblyDefinition.ReadAssembly)
-                .ToList();
+            try
+            {
+                Cpp2IlApi.Init();
+
+                Cpp2IlApi.InitializeLibCpp2Il(
+                    Path.Combine(DownloadPath, "GameAssembly.dll"),
+                    Path.Combine(unityDataDirPath, "il2cpp_data/Metadata/global-metadata.dat"),
+                    unityVersion);
+
+                var processingLayers = new List<Cpp2IlProcessingLayer>
+                {
+                    new AttributeInjectorProcessingLayer(),
+                };
+
+                foreach (var processingLayer in processingLayers)
+                    processingLayer.PreProcess(Cpp2IlApi.CurrentAppContext, processingLayers);
+
+                foreach (var processingLayer in processingLayers)
+                    processingLayer.Process(Cpp2IlApi.CurrentAppContext);
+
+                var builtAssemblies = new AsmResolverDllOutputFormatDefault().BuildAssemblies(Cpp2IlApi.CurrentAppContext);
+                dummyDlls = new AsmToCecilConverter(builtAssemblies).ConvertAll();
+            }
+            finally
+            {
+                Cpp2IlApi.ResetInternalState();
+            }
         }
         // Don't need Cpp2IL anymore, unlock it
         
