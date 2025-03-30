@@ -42,6 +42,7 @@ public sealed class App(
     private delegate Task SteamCheckTaskDelegate(CancellationToken ct = default);
     
     private static readonly object Cpp2IlLock = new();
+    private static bool Cpp2IlInitialized; 
 
     private readonly AppOptions options = options.Value;
     private SteamCheckTaskDelegate? steamCheckTaskDelegate;
@@ -522,7 +523,20 @@ public sealed class App(
 
             try
             {
-                Cpp2IlApi.Init();
+                if (!Cpp2IlInitialized)
+                {
+                    Cpp2IL.Core.Logging.Logger.VerboseLog += (message, s) =>
+                        logger.LogDebug("[Cpp2IL] [{Sender}] {Message}", s, message.Trim());
+                    Cpp2IL.Core.Logging.Logger.InfoLog += (message, s) =>
+                        logger.LogInformation("[Cpp2IL] [{Sender}] {Message}", s, message.Trim());
+                    Cpp2IL.Core.Logging.Logger.WarningLog += (message, s) =>
+                        logger.LogWarning("[Cpp2IL] [{Sender}] {Message}", s, message.Trim());
+                    Cpp2IL.Core.Logging.Logger.ErrorLog += (message, s) =>
+                        logger.LogError("[Cpp2IL] [{Sender}] {Message}", s, message.Trim());
+                    
+                    Cpp2IlApi.Init();
+                    Cpp2IlInitialized = true;
+                }
 
                 Cpp2IlApi.InitializeLibCpp2Il(
                     Path.Combine(DownloadPath, "GameAssembly.dll"),
