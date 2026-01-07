@@ -574,9 +574,34 @@ public sealed class App(
         logger.LogInformation("Running publicizer on manifest {ManifestId}", steamAppVersion.ManifestId);
         await userInterface.AnnounceAsync("🔧 Running assembly publicizer on the manifest...");
         
-        var managedPath = Path.Combine(unityDataDirPath, "Managed");
         Directory.CreateDirectory(PublicizerOutputPath);
-        AssemblyPublicizer.Publicize(managedPath, PublicizerOutputPath, new AssemblyPublicizerOptions { Strip = true });
+
+        var files = Directory
+            .EnumerateFiles(Path.Combine(unityDataDirPath, "Managed"), "*.dll")
+            .Where(path =>
+            {
+                var file = Path.GetFileName(path);
+                if (file.StartsWith("Mono", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (file.StartsWith("System", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                
+                return file is not ("netstandard.dll" or "mscorlib.dll");
+            });
+        
+        Parallel.ForEach(files, path =>
+        {
+            var file = Path.GetFileName(path);
+            var output = Path.Combine(PublicizerOutputPath, file);
+            
+            AssemblyPublicizer.Publicize(path, output, new AssemblyPublicizerOptions
+            {
+                Strip = true,
+                Target = file is "Assembly-CSharp.dll" or "Assembly-CSharp-firstpass.dll"
+                    ? PublicizeTarget.All
+                    : PublicizeTarget.None
+            });
+        });
         
         await userInterface.AnnounceAsync("🎉 App has been successfully publicized!");
     }
