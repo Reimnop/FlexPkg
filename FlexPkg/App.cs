@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Text;
 using AssetRipper.Primitives;
+using BepInEx.AssemblyPublicizer;
 using Cpp2IL.Core;
 using Cpp2IL.Core.Api;
-using Cpp2IL.Core.InstructionSets;
 using Cpp2IL.Core.OutputFormats;
 using Cpp2IL.Core.ProcessingLayers;
 using Discord;
@@ -15,7 +15,6 @@ using FlexPkg.UserInterface;
 using Il2CppInterop.Common;
 using Il2CppInterop.Generator;
 using Il2CppInterop.Generator.Runners;
-using LibCpp2IL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mono.Cecil;
@@ -37,6 +36,7 @@ public sealed class App(
 {
     private const string DownloadPath = "output";
     private const string Cpp2IlOutputPath = "cpp2il_output";
+    private const string PublicizerOutputPath = "publicizer_output";
     private const string UnityBaseLibsPath = "unity_base_libs";
     
     private delegate Task SteamCheckTaskDelegate(CancellationToken ct = default);
@@ -113,7 +113,7 @@ public sealed class App(
                         return;
                     }
 
-                    await AddUpdatesToDatabase(updates);
+                    await AddUpdatesToDatabase(updates, ct);
                     await interaction.RespondAsync(GetUpdatesMessage(updates));
 
                 }),
@@ -126,7 +126,7 @@ public sealed class App(
                 {
                     var steamAccounts = context.SteamAccounts;
                     steamAccounts.RemoveRange(steamAccounts.Where(x => x.Username == options.Steam.UserName));
-                    await context.SaveChangesAsync();
+                    await context.SaveChangesAsync(ct);
                     await interaction.RespondAsync("🔒 Logged out!");
                     
                     Environment.Exit(0);
@@ -198,7 +198,8 @@ public sealed class App(
                         return;
                     }
                     
-                    var manifest = await context.SteamAppManifests.FirstOrDefaultAsync(x => x.Id == id);
+                    var manifest = await context.SteamAppManifests.
+                        FirstOrDefaultAsync(x => x.Id == id, ct);
                     if (manifest is null)
                     {
                         await interaction.RespondAsync("❌ The manifest is not found in the database.", error: true);
@@ -206,7 +207,7 @@ public sealed class App(
                     }
                     
                     context.SteamAppManifests.Remove(manifest);
-                    await context.SaveChangesAsync();
+                    await context.SaveChangesAsync(ct);
                     
                     await interaction.RespondAsync("✅ The manifest has been removed from the database!");
                 }),
@@ -220,7 +221,7 @@ public sealed class App(
                     var manifests = await context.SteamAppManifests
                         .AsNoTracking()
                         .OrderByDescending(m => m.CreatedAt)
-                        .ToListAsync();
+                        .ToListAsync(ct);
 
                     var pages = await manifests.Chunk(3).ToAsyncEnumerable().SelectAwait(async c => new UiPage(
                         "Manifests",
@@ -233,7 +234,7 @@ public sealed class App(
                                     pm.Id == m.Id &&
                                     pm.BranchName != m.BranchName)
                                 .OrderByDescending(pm => pm.CreatedAt)
-                                .ToListAsync();
+                                .ToListAsync(ct);
                             
                             var titleMarker = m.Handled? "🟩" : otherBranches.Count > 0 ? "🟨" : "🟥";
                             var title = $"{titleMarker} {m.Id} (`{m.BranchName}`)";
@@ -263,8 +264,8 @@ public sealed class App(
                                         .Replace(m.PatchNotes, "\n"), 180)}`");
 
                             return new UiPageSection(title, builder.ToString());
-                        }).ToListAsync())
-                    ).ToListAsync();
+                        }).ToListAsync(ct))
+                    ).ToListAsync(ct);
 
                     if (pages.Count > 0)
                         await interaction.RespondPaginatedAsync(string.Empty, pages);
@@ -444,11 +445,10 @@ public sealed class App(
         var form = new Form(
             "Configure Manifest",
             $"Manifest ID: **{steamAppVersion.ManifestId}**\n" +
-            $"Branch: `{steamAppVersion.BranchName}`", new[]
-            {
+            $"Branch: `{steamAppVersion.BranchName}`", [
                 new FormElement("version", "Version"),
-                new FormElement("patch_notes", "Patch Notes", true),
-            });
+                new FormElement("patch_notes", "Patch Notes", true)
+            ]);
         
         var response = await userInterface.PromptFormAsync(form);
         if (response is null)
@@ -482,12 +482,132 @@ public sealed class App(
             Directory.Delete(DownloadPath, true);
         if (Directory.Exists(Cpp2IlOutputPath))
             Directory.Delete(Cpp2IlOutputPath, true);
+        if (Directory.Exists(PublicizerOutputPath))
+            Directory.Delete(PublicizerOutputPath, true);
         
         logger.LogInformation("Downloading manifest {ManifestId}", steamAppVersion.ManifestId);
         await appSource.DownloadAppAsync("output", appVersion);
         
         await userInterface.AnnounceAsync("🎉 The manifest has been downloaded and stored!");
         
+        // Check backend
+        var unityDataDirPath = Directory.GetDirectories(DownloadPath, "*_Data", SearchOption.TopDirectoryOnly).FirstOrDefault();
+        if (unityDataDirPath is null)
+        {
+            logger.LogError("Unity data directory is not found");
+            return;
+        }
+        
+        logger.LogInformation("Determining the backend of the game");
+
+        string outputPath;
+        if (File.Exists(Path.Combine(unityDataDirPath, "Managed/Assembly-CSharp.dll")))
+        {
+            outputPath = PublicizerOutputPath;
+            logger.LogInformation("Mono backend detected");
+            await HandleMono(steamAppVersion, unityDataDirPath);
+        }
+        else if (File.Exists(Path.Combine(unityDataDirPath, "il2cpp_data/Metadata/global-metadata.dat")))
+        {
+            outputPath = Cpp2IlOutputPath;
+            logger.LogInformation("IL2CPP backend detected");
+            await HandleIl2Cpp(steamAppVersion, unityDataDirPath);
+        }
+        else
+        {
+            logger.LogWarning("No backend detected");
+            await userInterface.AnnounceAsync("❌ Failed to determine the backend of the game (Mono, IL2CPP)");
+            return;
+        }
+        
+        logger.LogInformation("Building NuGet package");
+        await userInterface.AnnounceAsync("📦 Building NuGet package...");
+        var packageBuilder = new PackageBuilder
+        {
+            Id = options.Package.Name,
+            Description = options.Package.Description,
+            Version = new NuGetVersion(manifest.Version),
+        };
+
+        packageBuilder.Authors.AddRange(options.Package.Authors);
+        packageBuilder.ReleaseNotes = manifest.PatchNotes;
+        packageBuilder.DependencyGroups.Add(
+            new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
+        
+        if (!string.IsNullOrWhiteSpace(options.Package.ProjectUrl))
+            packageBuilder.ProjectUrl = new Uri(options.Package.ProjectUrl);
+
+        if (!string.IsNullOrWhiteSpace(options.Package.IconPath))
+        {
+            packageBuilder.Files.Add(new PhysicalPackageFile
+            {
+                SourcePath = options.Package.IconPath,
+                TargetPath = "icon.png",
+            });
+            packageBuilder.Icon = "icon.png";
+        }
+
+        foreach (var file in Directory.GetFiles(outputPath))
+        {
+            packageBuilder.Files.Add(new PhysicalPackageFile
+            {
+                SourcePath = file,
+                TargetPath = $"lib/netstandard2.0/{Path.GetFileName(file)}"
+            });
+        }
+        
+        await PublishNuGetPackage(packageBuilder);
+        
+        // Flag manifest as handled
+        manifest.Handled = true;
+        await context.SaveChangesAsync(ct);
+        
+        await userInterface.AnnounceAsync("✅ All done. Thank you!");
+        
+        logger.LogInformation("Pushing update notification");
+        await userInterface.PushUpdateNotificationAsync(manifest);
+    }
+
+    private async Task HandleMono(SteamAppVersion steamAppVersion, string unityDataDirPath)
+    {
+        // Run publicizer on it
+        logger.LogInformation("Running publicizer on manifest {ManifestId}", steamAppVersion.ManifestId);
+        await userInterface.AnnounceAsync("🔧 Running assembly publicizer on the manifest...");
+        
+        Directory.CreateDirectory(PublicizerOutputPath);
+
+        var files = Directory
+            .EnumerateFiles(Path.Combine(unityDataDirPath, "Managed"), "*.dll")
+            .Where(path =>
+            {
+                var file = Path.GetFileName(path);
+                if (file.StartsWith("Mono", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (file.StartsWith("System", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                
+                return file is not ("netstandard.dll" or "mscorlib.dll");
+            });
+        
+        Parallel.ForEach(files, path =>
+        {
+            var file = Path.GetFileName(path);
+            var output = Path.Combine(PublicizerOutputPath, file);
+            
+            AssemblyPublicizer.Publicize(path, output, new AssemblyPublicizerOptions
+            {
+                Strip = true,
+                Target = file is "Assembly-CSharp.dll" or "Assembly-CSharp-firstpass.dll"
+                    ? PublicizeTarget.All
+                    : PublicizeTarget.None
+            });
+        });
+        
+        await userInterface.AnnounceAsync("🎉 App has been successfully publicized!");
+    }
+
+    private async Task HandleIl2Cpp(SteamAppVersion steamAppVersion, string unityDataDirPath)
+    {
         // Run Cpp2IL on it
         logger.LogInformation("Running Cpp2IL on manifest {ManifestId}", steamAppVersion.ManifestId);
         await userInterface.AnnounceAsync("🔧 Running Cpp2IL on the manifest...");
@@ -499,13 +619,6 @@ public sealed class App(
         {
             logger.LogInformation("Cpp2IL instance has been locked");
             
-            var unityDataDirPath = Directory.GetDirectories(DownloadPath, "*_Data", SearchOption.TopDirectoryOnly).FirstOrDefault();
-            if (unityDataDirPath is null)
-            {
-                logger.LogError("Unity data directory is not found");
-                return;
-            }
-
             var unityGameExePath = $"{unityDataDirPath[..^5]}.exe";
             if (!File.Exists(unityGameExePath))
             {
@@ -580,53 +693,6 @@ public sealed class App(
             .Run();
         
         await userInterface.AnnounceAsync("🎉 App has been successfully decompiled!");
-        
-        logger.LogInformation("Building NuGet package");
-        await userInterface.AnnounceAsync("📦 Building NuGet package...");
-        var packageBuilder = new PackageBuilder
-        {
-            Id = options.Package.Name,
-            Description = options.Package.Description,
-            Version = new NuGetVersion(manifest.Version),
-        };
-
-        packageBuilder.Authors.AddRange(options.Package.Authors);
-        packageBuilder.ReleaseNotes = manifest.PatchNotes;
-        packageBuilder.DependencyGroups.Add(
-            new PackageDependencyGroup(targetFramework: NuGetFramework.Parse("netstandard2.0"), packages: []));
-        
-        if (!string.IsNullOrWhiteSpace(options.Package.ProjectUrl))
-            packageBuilder.ProjectUrl = new Uri(options.Package.ProjectUrl);
-
-        if (!string.IsNullOrWhiteSpace(options.Package.IconPath))
-        {
-            packageBuilder.Files.Add(new PhysicalPackageFile
-            {
-                SourcePath = options.Package.IconPath,
-                TargetPath = "icon.png",
-            });
-            packageBuilder.Icon = "icon.png";
-        }
-
-        foreach (var file in Directory.GetFiles(Cpp2IlOutputPath))
-        {
-            packageBuilder.Files.Add(new PhysicalPackageFile
-            {
-                SourcePath = file,
-                TargetPath = $"lib/netstandard2.0/{Path.GetFileName(file)}",
-            });
-        }
-        
-        await PublishNuGetPackage(packageBuilder);
-        
-        // Flag manifest as handled
-        manifest.Handled = true;
-        await context.SaveChangesAsync(ct);
-        
-        await userInterface.AnnounceAsync("✅ All done. Thank you!");
-        
-        logger.LogInformation("Pushing update notification");
-        await userInterface.PushUpdateNotificationAsync(manifest);
     }
 
     private async Task PublishNuGetPackage(PackageBuilder packageBuilder)
