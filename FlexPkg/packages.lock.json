@@ -2,6 +2,15 @@
   "version": 1,
   "dependencies": {
     "net8.0": {
+      "BepInEx.AssemblyPublicizer": {
+        "type": "Direct",
+        "requested": "[0.4.3, )",
+        "resolved": "0.4.3",
+        "contentHash": "M9X52JHs8DX1kVz0I87l1e7v/GuYwvhVwl7tDNngAHMT9OxHB/xiUA85eYpakBRiiPeUMG2/BDddoBnIGBTw6A==",
+        "dependencies": {
+          "AsmResolver.DotNet": "5.5.1"
+        }
+      },
       "CommandLineParser": {
         "type": "Direct",
         "requested": "[2.9.1, )",
