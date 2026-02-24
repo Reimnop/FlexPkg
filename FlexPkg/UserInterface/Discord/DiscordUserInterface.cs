@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using Discord;
 using Discord.Webhook;
 using Discord.WebSocket;
@@ -442,6 +443,14 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
                 .WithTimestamp(manifest.CreatedAt)
                 .Build()
         ], username: webhookName, avatarUrl: webhookAvatarUrl);
+
+        if (!string.IsNullOrWhiteSpace(manifest.PatchNotes))
+        {
+            var fileName = $"changelog-{manifest.Version}.md";
+
+            using var contentMs = new MemoryStream(Encoding.UTF8.GetBytes(manifest.PatchNotes));
+            await webhookClient.SendFileAsync(contentMs, fileName, string.Empty);
+        }
     }
 
     private string GetRandomId()
