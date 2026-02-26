@@ -449,7 +449,7 @@ public sealed class DiscordUserInterface : IUserInterface, IAsyncDisposable
             var fileName = $"changelog-{manifest.Version}.md";
 
             using var contentMs = new MemoryStream(Encoding.UTF8.GetBytes(manifest.PatchNotes));
-            await webhookClient.SendFileAsync(contentMs, fileName, string.Empty);
+            await webhookClient.SendFileAsync(contentMs, fileName, string.Empty, username: webhookName, avatarUrl: webhookAvatarUrl);
         }
     }
 
